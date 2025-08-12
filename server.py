@@ -40,6 +40,12 @@ app.add_middleware(
 )
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker and monitoring"""
+    return {"status": "healthy", "processing": is_processing}
+
+
 @app.get("/tts")
 @app.post("/tts")
 async def inference_sft(

@@ -8,7 +8,14 @@ RUN apt update && \
 WORKDIR /app
 COPY . ./
 
+RUN groupadd -g 1000 appgroup && useradd -u 1000 -g appgroup -m appuser
+RUN chown -R appuser:appgroup /app
+
 # Create triton cache directory with proper permissions
 RUN mkdir -p /tmp/triton_cache && chmod 777 /tmp/triton_cache
+RUN mkdir -p /.cache && chmod 777 /.cache
+RUN mkdir -p /.config/pulse && chmod 777 /.config && chmod 777 /.config/pulse
+
+RUN chmod +x /app/health-check.sh
 
 RUN uv pip install --system -e . && uv pip install --system -e .[compile]

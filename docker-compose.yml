@@ -29,8 +29,8 @@ services:
       retries: 3
     user: "1000:1000"
     tmpfs:
-      - /tmp:noexec,nosuid,size=10g
-      - /var/tmp:noexec,nosuid,size=10g
+      - /tmp:rw,exec,nosuid,size=10g
+      - /var/tmp:rw,exec,nosuid,size=10g
     security_opt:
       - no-new-privileges:true
 
