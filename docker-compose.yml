@@ -1,9 +1,9 @@
 services:
-  tts_server:
+  zonos_tts_server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tts_server
+    container_name: zonos_tts_server
     command: [ "python3", "server.py", "--port", "8189" ]
     ports:
       - "8189:8189"
@@ -20,7 +20,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=0
       - GRADIO_SHARE=False
     networks:
-      - tts_server_network
+      - zonos_tts_server_network
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "/app/health-check.sh" ]
@@ -35,8 +35,8 @@ services:
       - no-new-privileges:true
 
 networks:
-  tts_server_network:
-    name: tts_server_network
+  zonos_tts_server_network:
+    name: zonos_tts_server_network
     driver: bridge
     ipam:
       config:
