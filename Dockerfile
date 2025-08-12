@@ -8,4 +8,7 @@ RUN apt update && \
 WORKDIR /app
 COPY . ./
 
+# Create triton cache directory with proper permissions
+RUN mkdir -p /tmp/triton_cache && chmod 777 /tmp/triton_cache
+
 RUN uv pip install --system -e . && uv pip install --system -e .[compile]

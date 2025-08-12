@@ -5,9 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+*.mp3
 
 # Virtual environments
 .venv
+.zonos-venv
 
 # Misc.
 .ipynb_checkpoints/
