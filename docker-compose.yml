@@ -1,16 +1,45 @@
-version: '3.8'
-
 services:
-  zonos:
+  tts_server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: zonos_container
-    runtime: nvidia
-    network_mode: "host"
-    stdin_open: true
-    tty: true
-    command: ["python3", "gradio_interface.py"]
+      args:
+        GIT_BRANCH: master
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+    container_name: tts_server
+    command: [ "python3", "server.py", "--port", "8189" ]
+    ports:
+      - "8189:8189"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     environment:
-      - NVIDIA_VISIBLE_DEVICES=0
-      - GRADIO_SHARE=False
+      - PYTHONPATH=/app
+      - ALLOWED_HOSTS=127.0.0.1,localhost
+    networks:
+      - tts_server_network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "/app/health-check.sh" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    user: "1000:1000"
+    tmpfs:
+      - /tmp:noexec,nosuid,size=10g
+      - /var/tmp:noexec,nosuid,size=10g
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  tts_server_network:
+    name: tts_server_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
