@@ -4,11 +4,20 @@ import argparse
 import io
 import os
 import logging
-import tempfile
 import re
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Optional
+
+
+from fastapi import FastAPI, Form, File, UploadFile, HTTPException
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+import torch
+import torchaudio
+from zonos.model import Zonos
+from zonos.conditioning import make_cond_dict
+from zonos.utils import DEFAULT_DEVICE as device
 
 # Fix Triton cache directory permission issue
 os.environ["TRITON_CACHE_DIR"] = "/tmp/triton_cache"
@@ -19,17 +28,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()],  # This ensures output to console
 )
-
-from os import getenv
-from fastapi import FastAPI, Form, File, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import torch
-import torchaudio
-from zonos.model import Zonos
-from zonos.conditioning import make_cond_dict
-from zonos.utils import DEFAULT_DEVICE as device
 
 # Pre-compiled regex patterns for better performance
 WHITESPACE_PATTERN = re.compile(r"\s+")
@@ -72,7 +70,7 @@ app.add_middleware(
 )
 
 
-def split_text_into_chunks(text: str, max_words: int = 60) -> list[str]:
+def split_text_into_chunks(text: str, max_words: int = 40) -> list[str]:
     """
     Split text into chunks of maximum specified words while preserving full phrases.
     Prioritizes complete sentences, then clauses, then reduces word count if needed.
@@ -613,7 +611,7 @@ async def inference_sft(
             local_vars.update({"model": model, "speaker": speaker})
 
             # Split text into chunks
-            text_chunks = split_text_into_chunks(text.strip(), max_words=60)
+            text_chunks = split_text_into_chunks(text.strip(), max_words=40)
 
             if not text_chunks:
                 raise HTTPException(
