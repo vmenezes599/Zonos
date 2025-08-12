@@ -2,7 +2,7 @@ FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
 RUN pip install uv
 
 RUN apt update && \
-    apt install -y espeak-ng && \
+    apt install -y espeak-ng curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
