@@ -1,10 +1,12 @@
 """Zonos TTS Server"""
 
+import sys
 import argparse
 import io
 import os
 import logging
 import re
+import time
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -38,6 +40,28 @@ CLAUSE_PATTERN = re.compile(r"[,;]|\s+(?:and|but|or|yet|so|for|nor)\s+")
 _processing_semaphore = asyncio.Semaphore(1)  # Allow only one request at a time
 
 
+# Global flag to save audio chunks to files (automatically detects debug mode)
+# Saves each audio chunk as a separate WAV file when debugging is detected
+def _is_debugging():
+    """Detect if we're in debug mode"""
+
+    # Check if debugger is attached
+    if hasattr(sys, "gettrace") and sys.gettrace() is not None:
+        return True
+    # Check for debug environment variables
+    if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
+        return True
+    if os.getenv("ZONOS_DEBUG", "").lower() in ("true", "1", "yes"):
+        return True
+
+    if "--debug" in sys.argv:
+        return True
+    return False
+
+
+SAVE_CHUNK_FILES = _is_debugging()
+
+
 def load_model() -> Zonos:
     """
     Load a fresh model instance for each request.
@@ -47,6 +71,48 @@ def load_model() -> Zonos:
     model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=device)
     logging.info("TTS model loaded successfully")
     return model
+
+
+def save_chunk_audio(
+    chunk_wav: torch.Tensor, chunk_index: int, sampling_rate: int
+) -> None:
+    """
+    Save audio chunk to a WAV file in the same folder as server.py.
+
+    Args:
+        chunk_wav: Audio tensor for the chunk
+        chunk_index: Index of the chunk (0-based)
+        sampling_rate: Sampling rate of the audio
+    """
+    if not SAVE_CHUNK_FILES:
+        return
+
+    try:
+        # Get the directory where server.py is located
+        server_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Create filename with timestamp and chunk index
+        timestamp = int(time.time())
+        filename = f"chunk_{chunk_index:03d}_{timestamp}.wav"
+        filepath = os.path.join(server_dir, filename)
+
+        # Ensure the audio tensor is in the correct format (2D: channels x samples)
+        if chunk_wav.dim() > 2:
+            # If more than 2D, take first batch item
+            audio_to_save = chunk_wav[0]
+        elif chunk_wav.dim() == 1:
+            # If 1D, add channel dimension
+            audio_to_save = chunk_wav.unsqueeze(0)
+        else:
+            # Already 2D, keep as is
+            audio_to_save = chunk_wav
+
+        # Save the audio chunk
+        torchaudio.save(filepath, audio_to_save, sampling_rate, format="wav")
+        logging.info(f"Saved audio chunk to: {filepath}")
+
+    except Exception as e:
+        logging.warning(f"Failed to save audio chunk {chunk_index}: {str(e)}")
 
 
 @asynccontextmanager
@@ -180,7 +246,7 @@ def split_text_into_chunks(text: str, max_words: int = 40) -> list[str]:
         chunks.append(current_chunk.strip())
 
     # Filter out empty chunks
-    chunks = [chunk for chunk in chunks if chunk.strip()]
+    chunks = [f"... {chunk}" for chunk in chunks if chunk.strip()]
 
     return chunks if chunks else [text.strip()]
 
@@ -256,6 +322,9 @@ def process_single_chunk(model, text: str, speaker, seed: int) -> torch.Tensor:
     codes = model.generate(conditioning)
     final_audio = model.autoencoder.decode(codes).cpu()
 
+    # Save single chunk audio to file if flag is enabled
+    save_chunk_audio(final_audio, 0, model.autoencoder.sampling_rate)
+
     # Validate tensor dimensions before accessing
     if final_audio.dim() == 0 or final_audio.shape[0] == 0:
         raise ValueError("Empty tensor generated for single chunk")
@@ -324,6 +393,9 @@ def process_multiple_chunks(
             # Generate audio for this chunk
             codes = model.generate(conditioning)
             chunk_wav = model.autoencoder.decode(codes).cpu()
+
+            # Save chunk audio to file if flag is enabled
+            save_chunk_audio(chunk_wav, i, model.autoencoder.sampling_rate)
 
             # Validate tensor dimensions before accessing
             if chunk_wav.dim() == 0 or chunk_wav.shape[0] == 0:

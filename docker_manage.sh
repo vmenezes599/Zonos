@@ -16,7 +16,7 @@ status)
 
 logs | l)
     echo "📜 Viewing TTS Server logs..."
-    docker compose -f $DOCKER_COMPOSE_FILE logs -f tts_server
+    docker compose -f $DOCKER_COMPOSE_FILE logs -f zonos_tts_server
     ;;
 
 stop | st)
@@ -34,16 +34,16 @@ clean | c)
 
 build | b)
     echo "Building TTS Server..."
-    docker compose -f $DOCKER_COMPOSE_FILE stop tts_server
-    docker compose -f $DOCKER_COMPOSE_FILE rm -f tts_server
-    docker compose -f $DOCKER_COMPOSE_FILE build tts_server --no-cache
-    docker compose -f $DOCKER_COMPOSE_FILE up -d tts_server
+    docker compose -f $DOCKER_COMPOSE_FILE stop zonos_tts_server
+    docker compose -f $DOCKER_COMPOSE_FILE rm -f zonos_tts_server
+    docker compose -f $DOCKER_COMPOSE_FILE build zonos_tts_server --no-cache
+    docker compose -f $DOCKER_COMPOSE_FILE up -d zonos_tts_server
     echo "✅ TTS Server build completed!"
     ;;
 
 start | s)
     echo "🚀 Starting TTS Server..."
-    docker compose -f $DOCKER_COMPOSE_FILE up -d tts_server
+    docker compose -f $DOCKER_COMPOSE_FILE up -d zonos_tts_server
     echo "✅ TTS Server started successfully!"
     ;;
 
