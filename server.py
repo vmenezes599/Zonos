@@ -1,24 +1,26 @@
 """Zonos TTS Server"""
 
-import sys
 import argparse
-import io
-import os
-import logging
-import re
-import time
 import asyncio
+import gc
+import io
+import logging
+import os
+import re
+import sys
+import time
 from contextlib import asynccontextmanager
 
-
-from fastapi import FastAPI, Form, File, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+import psutil
 import torch
 import torchaudio
-from zonos.model import Zonos
+import uvicorn
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
 from zonos.conditioning import make_cond_dict
+from zonos.model import Zonos
 from zonos.utils import DEFAULT_DEVICE as device
 
 # Fix Triton cache directory permission issue
@@ -68,6 +70,13 @@ def load_model() -> Zonos:
     This ensures memory is freed after each request.
     """
     logging.info("Loading TTS model...")
+
+    # Force cleanup before loading new model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
     model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=device)
     logging.info("TTS model loaded successfully")
     return model
@@ -298,6 +307,16 @@ def load_model_and_speaker(audio_content: bytes, filename: str) -> tuple:
     wav, sampling_rate = torchaudio.load(audio_buffer)
     speaker = model.make_speaker_embedding(wav, sampling_rate)
 
+    # Clean up intermediate variables immediately
+    del audio_buffer
+    wav = wav.cpu()  # Move to CPU to free GPU memory
+    del wav
+
+    # Force cleanup
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return model, speaker, sampling_rate
 
 
@@ -417,6 +436,9 @@ def process_multiple_chunks(
 
             # Clean up intermediate variables to save memory
             del codes, conditioning, chunk_cond_dict
+
+            # Force immediate cleanup to reduce memory pressure
+            gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -482,15 +504,120 @@ def create_audio_response(
     )
 
 
+def force_delete_model(model) -> None:
+    """
+    Aggressively delete model and force immediate memory release.
+    This function ensures the model is completely removed from memory.
+    """
+    if model is None:
+        return
+
+    try:
+        # Move everything to CPU first
+        if hasattr(model, "cpu"):
+            model.cpu()
+
+        # Delete model components one by one
+        if hasattr(model, "autoencoder") and model.autoencoder is not None:
+            if hasattr(model.autoencoder, "cpu"):
+                model.autoencoder.cpu()
+            # Clear autoencoder parameters
+            if hasattr(model.autoencoder, "parameters"):
+                for param in model.autoencoder.parameters():
+                    del param
+            del model.autoencoder
+            model.autoencoder = None
+
+        if hasattr(model, "transformer") and model.transformer is not None:
+            if hasattr(model.transformer, "cpu"):
+                model.transformer.cpu()
+            # Clear transformer parameters
+            if hasattr(model.transformer, "parameters"):
+                for param in model.transformer.parameters():
+                    del param
+            del model.transformer
+            model.transformer = None
+
+        if hasattr(model, "speaker_encoder") and model.speaker_encoder is not None:
+            if hasattr(model.speaker_encoder, "cpu"):
+                model.speaker_encoder.cpu()
+            # Clear speaker encoder parameters
+            if hasattr(model.speaker_encoder, "parameters"):
+                for param in model.speaker_encoder.parameters():
+                    del param
+            del model.speaker_encoder
+            model.speaker_encoder = None
+
+        # Clear all model parameters and buffers
+        if hasattr(model, "parameters"):
+            for param in model.parameters():
+                if param.grad is not None:
+                    param.grad = None
+                # Force delete parameter data
+                if hasattr(param, "data"):
+                    param.data = None
+                del param
+
+        if hasattr(model, "buffers"):
+            for buffer in model.buffers():
+                del buffer
+
+        # Clear model state dict
+        if hasattr(model, "state_dict"):
+            try:
+                state_dict = model.state_dict()
+                for key in list(state_dict.keys()):
+                    del state_dict[key]
+                state_dict.clear()
+                del state_dict
+            except Exception:
+                pass
+
+        # Clear any cached properties or methods
+        if hasattr(model, "__dict__"):
+            for attr_name in list(model.__dict__.keys()):
+                if not attr_name.startswith("_"):
+                    attr = getattr(model, attr_name)
+                    if torch.is_tensor(attr):
+                        setattr(model, attr_name, None)
+                        del attr
+
+        # Force model to None
+        del model
+
+    except Exception as e:
+        logging.warning(f"Error during aggressive model deletion: {e}")
+
+    finally:
+        # Force immediate cleanup
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+
+
 def cleanup_memory(local_vars: dict) -> None:
     """
     Comprehensive memory cleanup for GPU and CPU resources.
+    Aggressively frees ALL memory including RAM, GPU, and PyTorch caches.
 
     Args:
         local_vars: Dictionary of local variables to clean up
     """
+
     try:
-        # Move tensors to CPU before deletion to free GPU memory
+        # Get initial memory usage for reporting
+        process = psutil.Process(os.getpid())
+        memory_before = process.memory_info().rss / 1024**2  # MB
+
+        # Get GPU memory info before cleanup if available
+        gpu_allocated_before = 0
+        gpu_cached_before = 0
+        if torch.cuda.is_available():
+            gpu_allocated_before = torch.cuda.memory_allocated()
+            gpu_cached_before = torch.cuda.memory_reserved()
+
+        # 1. First, move all tensors to CPU to free GPU memory
         variables_to_cleanup = [
             "codes",
             "final_audio",
@@ -500,70 +627,148 @@ def cleanup_memory(local_vars: dict) -> None:
             "cond_dict",
             "chunk_cond_dict",
             "base_cond_dict",
+            "audio_buffer",
+            "chunk_wav",
+            "processed_chunk",
         ]
 
+        # Move tensors to CPU first
         for var_name in variables_to_cleanup:
             if var_name in local_vars and local_vars[var_name] is not None:
                 var_obj = local_vars[var_name]
                 if hasattr(var_obj, "cpu"):
-                    var_obj = var_obj.cpu()
+                    try:
+                        var_obj = var_obj.cpu()
+                        local_vars[var_name] = var_obj
+                    except Exception:
+                        pass  # Continue cleanup even if this fails
 
-        # Handle audio_tensors list separately
+        # Handle audio_tensors list separately - move to CPU and clear
         if "audio_tensors" in local_vars and local_vars["audio_tensors"] is not None:
-            for tensor in local_vars["audio_tensors"]:
-                if hasattr(tensor, "cpu"):
-                    tensor = tensor.cpu()
+            try:
+                for i, tensor in enumerate(local_vars["audio_tensors"]):
+                    if hasattr(tensor, "cpu"):
+                        local_vars["audio_tensors"][i] = tensor.cpu()
+                    del tensor  # Explicitly delete each tensor
+                local_vars["audio_tensors"].clear()  # Clear the list
+            except Exception:
+                pass
 
-        # Delete model and clear references
+        # 2. Clear model thoroughly - this is the biggest RAM consumer
         if "model" in local_vars and local_vars["model"] is not None:
-            # Clear model from GPU memory if possible
-            if hasattr(local_vars["model"], "cpu"):
-                local_vars["model"].cpu()
-            del local_vars["model"]
+            # Use aggressive model deletion
+            force_delete_model(local_vars["model"])
+            local_vars["model"] = None
 
-        # Delete all variables
+        # 3. Explicitly delete all tracked variables
         for var_name in variables_to_cleanup:
             if var_name in local_vars:
-                del local_vars[var_name]
+                try:
+                    del local_vars[var_name]
+                except Exception:
+                    pass
 
+        # Delete audio_tensors completely
         if "audio_tensors" in local_vars:
-            del local_vars["audio_tensors"]
+            try:
+                del local_vars["audio_tensors"]
+            except Exception:
+                pass
 
-        # Force garbage collection
-        import gc
+        # 4. Clear PyTorch's internal caches and temporary allocations
+        # Clear autograd computation graph
+        if hasattr(torch.autograd, "set_grad_enabled"):
+            torch.autograd.set_grad_enabled(False)
+            torch.autograd.set_grad_enabled(True)
 
-        gc.collect()
+        # Clear PyTorch's temporary allocations
+        if hasattr(torch, "_C") and hasattr(torch._C, "_cuda_clearCublasWorkspaces"):
+            try:
+                torch._C._cuda_clearCublasWorkspaces()
+            except Exception:
+                pass
 
-        # Clear GPU cache if using CUDA
+        # 5. Force multiple garbage collection passes
+        for i in range(5):  # Multiple aggressive GC passes
+            collected = gc.collect()
+            if i == 0:
+                logging.info(f"GC pass {i+1}: collected {collected} objects")
+
+        # 6. Clear GPU memory aggressively
         if torch.cuda.is_available():
-            # Get memory info before cleanup
-            allocated_before = torch.cuda.memory_allocated()
-            cached_before = torch.cuda.memory_reserved()
+            try:
+                # Multiple cleanup passes with synchronization
+                for _ in range(5):
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    if hasattr(torch.cuda, "reset_accumulated_memory_stats"):
+                        torch.cuda.reset_accumulated_memory_stats()
 
-            # Multiple cleanup passes for thorough memory release
-            for _ in range(3):  # Multiple passes for thorough cleanup
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
+                # Clear specific CUDA caches
+                if hasattr(torch.cuda, "reset_peak_memory_stats"):
+                    torch.cuda.reset_peak_memory_stats()
 
-            # Additional cleanup for persistent allocations
-            if hasattr(torch.cuda, "reset_accumulated_memory_stats"):
-                torch.cuda.reset_accumulated_memory_stats()
+                # Force CUDA memory defragmentation
+                if hasattr(torch.cuda, "memory_snapshot"):
+                    try:
+                        torch.cuda.memory_snapshot()
+                    except Exception:
+                        pass
 
-            # Get memory info after cleanup
-            allocated_after = torch.cuda.memory_allocated()
-            cached_after = torch.cuda.memory_reserved()
+            except Exception as e:
+                logging.warning(f"Error during CUDA cleanup: {e}")
 
-            memory_freed = (allocated_before - allocated_after) / 1024**2  # MB
-            cache_freed = (cached_before - cached_after) / 1024**2  # MB
+        # 7. Final memory reporting and aggressive system cleanup
+        try:
+            # Force system-level memory cleanup
+            # Multiple rounds of aggressive garbage collection
+            for i in range(10):  # Even more aggressive cleanup
+                collected = gc.collect()
+                if i < 3:
+                    logging.info(
+                        f"Aggressive GC pass {i+1}: collected {collected} objects"
+                    )
+
+            # Force all generations of garbage collection
+            if hasattr(gc, "collect"):
+                for generation in range(3):  # Python has 3 generations
+                    gc.collect(generation)
+
+            # Try to trigger OS-level memory cleanup
+            try:
+                import ctypes
+
+                if hasattr(ctypes, "CDLL"):
+                    libc = ctypes.CDLL("libc.so.6")
+                    if hasattr(libc, "malloc_trim"):
+                        libc.malloc_trim(0)  # Force libc to release memory to OS
+            except Exception:
+                pass  # Not critical if this fails
+
+            memory_after = process.memory_info().rss / 1024**2  # MB
+            memory_freed = memory_before - memory_after
+
+            gpu_info = ""
+            if torch.cuda.is_available():
+                gpu_allocated_after = torch.cuda.memory_allocated()
+                gpu_cached_after = torch.cuda.memory_reserved()
+                gpu_mem_freed = (gpu_allocated_before - gpu_allocated_after) / 1024**2
+                gpu_cache_freed = (gpu_cached_before - gpu_cached_after) / 1024**2
+                gpu_info = f", GPU: {gpu_mem_freed:.1f}MB allocated, {gpu_cache_freed:.1f}MB cached"
 
             logging.info(
-                f"GPU memory freed: {memory_freed:.1f}MB allocated, {cache_freed:.1f}MB cached"
+                f"Memory cleanup completed. RAM freed: {memory_freed:.1f}MB{gpu_info}"
             )
 
-        logging.info(f"Memory cleanup completed.")
+        except Exception as e:
+            logging.warning(f"Error getting memory stats: {e}")
 
     except Exception as cleanup_error:
         logging.warning(f"Error during memory cleanup: {cleanup_error}")
+
+    finally:
+        # Final garbage collection
+        gc.collect()
 
 
 def concatenate_audio_tensors(audio_tensors: list, sampling_rate: int) -> torch.Tensor:
@@ -680,7 +885,12 @@ async def inference_sft(
             model, speaker, sampling_rate = load_model_and_speaker(
                 audio_content, reference_audio_file.filename
             )
-            local_vars.update({"model": model, "speaker": speaker})
+            local_vars.update(
+                {"model": model, "speaker": speaker, "wav": None, "audio_buffer": None}
+            )
+
+            # Clear audio_content to free memory immediately
+            del audio_content
 
             # Split text into chunks
             text_chunks = split_text_into_chunks(text.strip(), max_words=40)
@@ -708,7 +918,15 @@ async def inference_sft(
             local_vars["final_audio"] = final_audio
 
             # Create and return audio response
-            return create_audio_response(final_audio, model.autoencoder.sampling_rate)
+            response = create_audio_response(
+                final_audio, model.autoencoder.sampling_rate
+            )
+
+            # Clean up final_audio immediately after creating response
+            del final_audio
+            local_vars["final_audio"] = None
+
+            return response
 
         except HTTPException:
             # Re-raise HTTP exceptions without modification
@@ -722,6 +940,34 @@ async def inference_sft(
         finally:
             # Cleanup memory and model
             cleanup_memory(local_vars)
+
+            # Additional aggressive cleanup beyond the function
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                # Try additional CUDA cleanup
+                if hasattr(torch.cuda, "ipc_collect"):
+                    torch.cuda.ipc_collect()
+
+            # Force system memory cleanup
+            try:
+                import ctypes
+
+                libc = ctypes.CDLL("libc.so.6")
+                if hasattr(libc, "malloc_trim"):
+                    libc.malloc_trim(0)
+            except Exception:
+                pass
+
+            # Log final memory state
+            try:
+                process = psutil.Process(os.getpid())
+                final_memory = process.memory_info().rss / 1024**2
+                logging.info(f"Final memory usage: {final_memory:.1f}MB")
+            except Exception:
+                pass
+
             logging.info(f"Audio generation ended.")
 
 
