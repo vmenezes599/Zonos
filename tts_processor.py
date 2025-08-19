@@ -162,7 +162,7 @@ def create_speaker_embedding(model, audio_file: str):
     return model.make_speaker_embedding(wav, sample_rate)
 
 
-def split_text_into_chunks(text: str, max_words: int = 80):
+def split_text_into_chunks(text: str, max_words: int = 50):
     """Split text into manageable chunks while preserving original punctuation"""
 
     # Split on sentence boundaries while preserving the original punctuation
