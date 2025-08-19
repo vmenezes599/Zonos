@@ -31,6 +31,8 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
         label: Label for the log output
         sample_count: Number of random chunks to sample and log
     """
+    pass
+
     if not audio_chunks:
         logger.info("%s: No chunks to analyze", label)
         return
@@ -53,9 +55,14 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
 
         logger.info(
             "Chunk %d: RMS=%.6f, Max=%.6f, Min=%.6f, MaxAbs=%.6f, Samples=%d",
-            idx+1, rms, max_val, min_val, max_abs, samples
+            idx + 1,
+            rms,
+            max_val,
+            min_val,
+            max_abs,
+            samples,
         )
-        
+
         # Analyze temporal decay within the chunk
         analyze_temporal_decay(chunk, f"Chunk {idx+1}")
 
@@ -66,10 +73,11 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
     max_rms = max(all_rms)
 
     logger.info(
-        "Overall RMS - Avg: %.6f, Min: %.6f, Max: %.6f",
-        avg_rms, min_rms, max_rms
+        "Overall RMS - Avg: %.6f, Min: %.6f, Max: %.6f", avg_rms, min_rms, max_rms
     )
     logger.info("=== End %s Analysis ===", label)
+
+
 def analyze_temporal_decay(audio_chunk, chunk_label):
     """
     Analyze volume decay over time within a single audio chunk
@@ -106,11 +114,16 @@ def analyze_temporal_decay(audio_chunk, chunk_label):
 
         duration_start = start_idx / 24000  # Assuming 24kHz sample rate
         duration_end = end_idx / 24000
-        
+
         logger.info(
             "  %s Segment %d (%.2fs-%.2fs): RMS=%.6f, Max=%.6f",
-            chunk_label, i+1, duration_start, duration_end, rms, max_val
-        )    # Calculate decay metrics
+            chunk_label,
+            i + 1,
+            duration_start,
+            duration_end,
+            rms,
+            max_val,
+        )  # Calculate decay metrics
     if len(segment_rms) > 1:
         rms_decay = (
             (segment_rms[0] - segment_rms[-1]) / segment_rms[0] * 100
@@ -119,11 +132,17 @@ def analyze_temporal_decay(audio_chunk, chunk_label):
 
         logger.info(
             "  %s RMS Decay: %.1f%% (from %.6f to %.6f)",
-            chunk_label, rms_decay, segment_rms[0], segment_rms[-1]
+            chunk_label,
+            rms_decay,
+            segment_rms[0],
+            segment_rms[-1],
         )
         logger.info(
             "  %s Max Decay: %.1f%% (from %.6f to %.6f)",
-            chunk_label, max_decay, segment_max[0], segment_max[-1]
+            chunk_label,
+            max_decay,
+            segment_max[0],
+            segment_max[-1],
         )
 
 
@@ -170,7 +189,12 @@ def split_text_into_chunks(text: str, max_words: int = 40):
     if current_chunk:
         chunks.append(current_chunk.strip())
 
-    return chunks if chunks else [text.strip()]
+    # Add "... " prefix to each chunk
+    prefixed_chunks = (
+        ["... " + chunk for chunk in chunks] if chunks else ["... " + text.strip()]
+    )
+
+    return prefixed_chunks
 
 
 def generate_audio_chunk(model, text: str, speaker, seed: int):
@@ -190,13 +214,87 @@ def generate_audio_chunk(model, text: str, speaker, seed: int):
     return audio.float()
 
 
-def normalize_audio_chunks(audio_chunks):
-    """Normalize all chunks to consistent volume"""
+def apply_temporal_compensation(audio_chunk, chunk_label, compensation_strength=0.5):
+    """
+    Apply temporal compensation to counteract volume decay within a chunk
+
+    Args:
+        audio_chunk: Single audio tensor
+        chunk_label: Label for logging
+        compensation_strength: How much to compensate (0.0 = no compensation, 1.0 = full compensation)
+
+    Returns:
+        Compensated audio chunk
+    """
+    if audio_chunk.dim() > 1:
+        # For stereo, process each channel
+        channels = audio_chunk.shape[0]
+        compensated_channels = []
+
+        for ch in range(channels):
+            channel_data = audio_chunk[ch]
+            compensated_channel = _apply_compensation_to_channel(
+                channel_data, chunk_label, compensation_strength
+            )
+            compensated_channels.append(compensated_channel)
+
+        return torch.stack(compensated_channels, dim=0)
+    else:
+        return _apply_compensation_to_channel(
+            audio_chunk, chunk_label, compensation_strength
+        )
+
+
+def _apply_compensation_to_channel(audio_data, chunk_label, compensation_strength):
+    """Apply compensation to a single audio channel"""
+    total_samples = len(audio_data)
+
+    # Create a linear gain ramp that increases over time
+    # Start at 1.0, end at (1.0 + compensation_strength)
+    gain_start = 1.0
+    gain_end = 1.0 + compensation_strength
+
+    # Create linear ramp
+    sample_indices = torch.arange(total_samples, dtype=torch.float32)
+    gain_ramp = gain_start + (gain_end - gain_start) * (sample_indices / total_samples)
+
+    # Apply the gain ramp
+    compensated_audio = audio_data * gain_ramp
+
+    # Log the compensation applied
+    logger.info(
+        "  %s: Applied temporal compensation (%.1fx to %.1fx)",
+        chunk_label,
+        gain_start,
+        gain_end,
+    )
+
+    return compensated_audio
+
+
+def normalize_audio_chunks(
+    audio_chunks, apply_compensation=True, compensation_strength=0.4
+):
+    """Normalize all chunks to consistent volume with optional temporal compensation"""
     if not audio_chunks:
         return audio_chunks
 
     # Log statistics before normalization
     log_audio_stats(audio_chunks, "BEFORE Normalization")
+
+    # Apply temporal compensation first if enabled
+    if apply_compensation:
+        logger.info("Applying temporal compensation to counteract volume decay...")
+        compensated_chunks = []
+        for i, chunk in enumerate(audio_chunks):
+            compensated_chunk = apply_temporal_compensation(
+                chunk, f"Chunk {i+1}", compensation_strength
+            )
+            compensated_chunks.append(compensated_chunk)
+
+        # Log statistics after compensation but before normalization
+        log_audio_stats(compensated_chunks, "AFTER Compensation (BEFORE Normalization)")
+        audio_chunks = compensated_chunks
 
     logger.info("Normalizing to target RMS: %.6f", GLOBAL_TARGET_RMS)
 
@@ -215,18 +313,22 @@ def normalize_audio_chunks(audio_chunks):
                 normalized_chunk = normalized_chunk * clip_factor
                 logger.info(
                     "Chunk %d: Applied clipping protection (factor: %.3f)",
-                    i+1, clip_factor
+                    i + 1,
+                    clip_factor,
                 )
 
             new_rms = torch.sqrt(torch.mean(normalized_chunk**2)).item()
             logger.info(
                 "Chunk %d: RMS %.6f -> %.6f (scale: %.3f)",
-                i+1, current_rms, new_rms, scale_factor
+                i + 1,
+                current_rms,
+                new_rms,
+                scale_factor,
             )
 
             normalized_chunks.append(normalized_chunk)
         else:
-            logger.warning("Chunk %d: Silent chunk detected", i+1)
+            logger.warning("Chunk %d: Silent chunk detected", i + 1)
             normalized_chunks.append(chunk)
 
     # Log statistics after normalization
@@ -273,10 +375,8 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
     audio_chunks = []
 
     for i, chunk in enumerate(chunks):
-        chunk_preview = chunk[:50] + ('...' if len(chunk) > 50 else '')
-        logger.info(
-            "Processing chunk %d/%d: '%s'", i+1, len(chunks), chunk_preview
-        )
+        chunk_preview = chunk[:50] + ("..." if len(chunk) > 50 else "")
+        logger.info("Processing chunk %d/%d: '%s'", i + 1, len(chunks), chunk_preview)
         audio = generate_audio_chunk(model, chunk, speaker, seed)
         audio_chunks.append(audio)
 
@@ -284,7 +384,10 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
 
     # Normalize and concatenate
     logger.info("Starting audio normalization...")
-    normalized_chunks = normalize_audio_chunks(audio_chunks)
+    # Apply temporal compensation with moderate strength (0.4 = 40% compensation)
+    normalized_chunks = normalize_audio_chunks(
+        audio_chunks, apply_compensation=True, compensation_strength=0.4
+    )
 
     logger.info("Concatenating audio chunks...")
     final_audio = concatenate_chunks(normalized_chunks, model.autoencoder.sampling_rate)
@@ -295,7 +398,9 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
     final_duration = final_audio.shape[-1] / model.autoencoder.sampling_rate
     logger.info(
         "Final audio - RMS: %.6f, Max: %.6f, Duration: %.2fs",
-        final_rms, final_max, final_duration
+        final_rms,
+        final_max,
+        final_duration,
     )
 
     # Save to file
@@ -308,6 +413,9 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
 
 
 def main():
+    """
+    Main function for TTS processing
+    """
     parser = argparse.ArgumentParser(description="Simple TTS Processing")
     parser.add_argument("--text", required=True, help="Text to convert to speech")
     parser.add_argument("--audio_file", required=True, help="Reference audio file")
