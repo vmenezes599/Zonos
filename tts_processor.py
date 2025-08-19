@@ -1,5 +1,6 @@
 """Simple TTS Processing Script for Subprocess Usage"""
 
+import re
 import argparse
 import logging
 import sys
@@ -161,13 +162,25 @@ def create_speaker_embedding(model, audio_file: str):
     return model.make_speaker_embedding(wav, sample_rate)
 
 
-def split_text_into_chunks(text: str, max_words: int = 40):
-    """Split text into manageable chunks"""
-    sentences = [
-        s.strip()
-        for s in text.replace("!", ".").replace("?", ".").split(".")
-        if s.strip()
-    ]
+def split_text_into_chunks(text: str, max_words: int = 80):
+    """Split text into manageable chunks while preserving original punctuation"""
+
+    # Split on sentence boundaries while preserving the original punctuation
+    # This regex finds sentence endings (., !, ?) followed by whitespace or end of string
+    sentence_pattern = r"([.!?])\s*"
+    parts = re.split(sentence_pattern, text)
+
+    # Reconstruct sentences with their original punctuation
+    sentences = []
+    for i in range(0, len(parts) - 1, 2):
+        sentence_text = parts[i].strip()
+        if sentence_text:  # Skip empty parts
+            punctuation = parts[i + 1] if i + 1 < len(parts) else ""
+            sentences.append(sentence_text + punctuation)
+
+    # Handle any remaining text without punctuation
+    if len(parts) % 2 == 1 and parts[-1].strip():
+        sentences.append(parts[-1].strip())
 
     chunks = []
     current_chunk = ""
@@ -181,7 +194,7 @@ def split_text_into_chunks(text: str, max_words: int = 40):
             current_words = sentence_words
         else:
             if current_chunk:
-                current_chunk += ". " + sentence
+                current_chunk += " " + sentence
             else:
                 current_chunk = sentence
             current_words += sentence_words
