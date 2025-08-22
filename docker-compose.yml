@@ -20,7 +20,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=0
       - GRADIO_SHARE=False
     networks:
-      - zonos_tts_server_network
+      - ai_server_network
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "/app/health-check.sh" ]
@@ -35,9 +35,6 @@ services:
       - no-new-privileges:true
 
 networks:
-  zonos_tts_server_network:
-    name: zonos_tts_server_network
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.23.0.0/16
+  ai_server_network:
+    external: true
+    name: ai_server_network
