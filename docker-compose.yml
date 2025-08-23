@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: zonos_tts_server
     command: [ "python3", "server.py", "--port", "8189" ]
-    ports:
-      - "8189:8189"
+    expose:
+      - "8189"
     deploy:
       resources:
         reservations:
@@ -20,8 +20,8 @@ services:
       - NVIDIA_VISIBLE_DEVICES=0
       - GRADIO_SHARE=False
     networks:
-      - ai_server_network
-      - dev_ai_server_network
+      - services_network
+      - dev_services_network
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "/app/health-check.sh" ]
@@ -36,9 +36,9 @@ services:
       - no-new-privileges:true
 
 networks:
-  ai_server_network:
+  services_network:
     external: true
-    name: ai_server_network
-  dev_ai_server_network:
+    name: services_network
+  dev_services_network:
     external: true
-    name: dev_ai_server_network
+    name: dev_services_network
