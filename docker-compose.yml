@@ -21,6 +21,7 @@ services:
       - GRADIO_SHARE=False
     networks:
       - ai_server_network
+      - dev_ai_server_network
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "/app/health-check.sh" ]
@@ -38,3 +39,6 @@ networks:
   ai_server_network:
     external: true
     name: ai_server_network
+  dev_ai_server_network:
+    external: true
+    name: dev_ai_server_network
