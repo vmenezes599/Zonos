@@ -14,7 +14,6 @@ services:
               capabilities: [ gpu ]
     environment:
       - PYTHONPATH=/app
-      - ALLOWED_HOSTS=127.0.0.1,localhost
       - NVIDIA_VISIBLE_DEVICES=0
       - GRADIO_SHARE=False
     networks:
