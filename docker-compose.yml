@@ -23,8 +23,9 @@ services:
     healthcheck:
       test: [ "CMD", "/app/health-check.sh" ]
       interval: 30s
-      timeout: 3s
+      timeout: 30s
       retries: 3
+      start_period: 10s
     user: "1000:1000"
     tmpfs:
       - /tmp:rw,exec,nosuid,size=10g
