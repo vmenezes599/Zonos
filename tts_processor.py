@@ -202,10 +202,7 @@ def split_text_into_chunks(text: str, max_words: int = 50):
     if current_chunk:
         chunks.append(current_chunk.strip())
 
-    # Add "... " prefix to each chunk
-    prefixed_chunks = (
-        ["... " + chunk for chunk in chunks] if chunks else ["... " + text.strip()]
-    )
+    prefixed_chunks = [chunk for chunk in chunks] if chunks else [text.strip()]
 
     return prefixed_chunks
 
