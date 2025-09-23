@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: zonos_tts_server
-    command: [ "python3", "server.py", "--port", "8189" ]
+    command: [ "python3", "Generic-AI-Server-Client/server.py", "--port", "8189" ]
     deploy:
       resources:
         reservations:
