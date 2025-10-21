@@ -5,17 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: zonos_tts_server
     command: [ "python3", "Generic-AI-Server-Client/server.py", "--port", "8189" ]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
+    gpus: all
     environment:
-      - PYTHONPATH=/app
-      - NVIDIA_VISIBLE_DEVICES=0
-      - GRADIO_SHARE=False
+      PYTHONPATH: /app
+      NVIDIA_VISIBLE_DEVICES: GPU-bfe56291-e722-318b-fbc0-526eb8393bf3
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      GRADIO_SHARE: "False"
     networks:
       - services_network
       - dev_services_network
