@@ -1,3 +1,3 @@
 [submodule "Generic-AI-Server-Client"]
-	path = Generic-AI-Server-Client
+	path = generic_ai_server_client
 	url = git@github.com:vmenezes599/Generic-AI-Server-Client.git
