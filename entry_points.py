@@ -50,25 +50,32 @@ async def process_tts_with_subprocess(
             str(seed),
         ]
 
-        logging.info(f"Running TTS subprocess: {' '.join(cmd)}")
+        logging.info("Running TTS subprocess: %s", " ".join(cmd))
 
-        # Run subprocess without capturing output so logs appear in console
-        # Only capture stderr to handle errors properly
-        result = subprocess.run(
-            cmd,
-            stdout=None,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=300,  # 5 minute timeout
+        # Run subprocess asynchronously to avoid blocking the event loop
+        # This allows health checks and other requests to be processed during TTS generation
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
-        if result.returncode != 0:
-            logging.error(f"TTS subprocess failed: {result.stderr}")
+        try:
+            _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # 5 minute timeout
+        except asyncio.TimeoutError as e:
+            process.kill()
+            await process.wait()
+            raise subprocess.TimeoutExpired(cmd, 300) from e
+
+        if process.returncode != 0:
+            stderr_text = stderr.decode("utf-8") if stderr else ""
+            logging.error("TTS subprocess failed: %s", stderr_text)
             raise HTTPException(status_code=500, detail="TTS processing failed")
 
         # Log any stderr output even on success (warnings, etc.)
-        if result.stderr:
-            logging.info(f"TTS subprocess stderr: {result.stderr}")
+        if stderr:
+            stderr_text = stderr.decode("utf-8")
+            logging.info("TTS subprocess stderr: %s", stderr_text)
 
         # Check if output file was created
         if not os.path.exists(temp_audio_output.name):
@@ -86,7 +93,7 @@ async def process_tts_with_subprocess(
             filename="generated_audio.mp3",
         )
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         logging.error("TTS subprocess timed out")
         cleanup_temp_files(
             [
@@ -94,16 +101,16 @@ async def process_tts_with_subprocess(
                 temp_audio_output.name if temp_audio_output else None,
             ]
         )
-        raise HTTPException(status_code=504, detail="TTS processing timed out")
+        raise HTTPException(status_code=504, detail="TTS processing timed out") from e
     except Exception as e:
-        logging.error(f"TTS processing error: {e}")
+        logging.error("TTS processing error: %s", e)
         cleanup_temp_files(
             [
                 temp_audio_input.name if temp_audio_input else None,
                 temp_audio_output.name if temp_audio_output else None,
             ]
         )
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}") from e
 
 
 def cleanup_temp_files(file_paths):
@@ -112,9 +119,9 @@ def cleanup_temp_files(file_paths):
         if file_path and os.path.exists(file_path):
             try:
                 os.unlink(file_path)
-                logging.info(f"Cleaned up temp file: {file_path}")
-            except Exception as e:
-                logging.warning(f"Failed to clean up temp file {file_path}: {e}")
+                logging.info("Cleaned up temp file: %s", file_path)
+            except OSError as e:
+                logging.warning("Failed to clean up temp file %s: %s", file_path, e)
 
 
 @router.get("/tts")
