@@ -36,7 +36,7 @@ async def process_tts_with_subprocess(
 
         # Run TTS processor as subprocess
         # Use absolute path to ensure it works regardless of working directory
-        tts_processor_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tts_processor.py")
+        tts_processor_path = "tts_processor.py"
         cmd = [
             sys.executable,
             tts_processor_path,
