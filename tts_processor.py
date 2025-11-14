@@ -42,9 +42,7 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
     logger.info("Total chunks: %d", len(audio_chunks))
 
     # Sample random chunks or use all if fewer than sample_count
-    sample_indices = random.sample(
-        range(len(audio_chunks)), min(sample_count, len(audio_chunks))
-    )
+    sample_indices = random.sample(range(len(audio_chunks)), min(sample_count, len(audio_chunks)))
 
     for _, idx in enumerate(sample_indices):
         chunk = audio_chunks[idx]
@@ -73,9 +71,7 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
     min_rms = min(all_rms)
     max_rms = max(all_rms)
 
-    logger.info(
-        "Overall RMS - Avg: %.6f, Min: %.6f, Max: %.6f", avg_rms, min_rms, max_rms
-    )
+    logger.info("Overall RMS - Avg: %.6f, Min: %.6f, Max: %.6f", avg_rms, min_rms, max_rms)
     logger.info("=== End %s Analysis ===", label)
 
 
@@ -89,9 +85,7 @@ def analyze_temporal_decay(audio_chunk, chunk_label):
     """
     if audio_chunk.dim() > 1:
         # For stereo, take the first channel or average
-        audio_data = (
-            audio_chunk[0] if audio_chunk.shape[0] > 1 else audio_chunk.squeeze()
-        )
+        audio_data = audio_chunk[0] if audio_chunk.shape[0] > 1 else audio_chunk.squeeze()
     else:
         audio_data = audio_chunk
 
@@ -126,9 +120,7 @@ def analyze_temporal_decay(audio_chunk, chunk_label):
             max_val,
         )  # Calculate decay metrics
     if len(segment_rms) > 1:
-        rms_decay = (
-            (segment_rms[0] - segment_rms[-1]) / segment_rms[0] * 100
-        )  # Percentage decay
+        rms_decay = (segment_rms[0] - segment_rms[-1]) / segment_rms[0] * 100  # Percentage decay
         max_decay = (segment_max[0] - segment_max[-1]) / segment_max[0] * 100
 
         logger.info(
@@ -152,7 +144,7 @@ def load_model():
     return Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=DEFAULT_DEVICE)
 
 
-def create_speaker_embedding(model, audio_file: str):
+def create_speaker_embedding(model: Zonos, audio_file: str):
     """Create speaker embedding from audio file"""
     with open(audio_file, "rb") as f:
         audio_content = f.read()
@@ -207,10 +199,10 @@ def split_text_into_chunks(text: str, max_words: int = 50):
     return prefixed_chunks
 
 
-def generate_audio_chunk(model, text: str, speaker, seed: int):
+def generate_audio_chunk(model: Zonos, text: str, **kwargs):
     """Generate audio for a single text chunk"""
-    torch.manual_seed(seed)
-    cond_dict = make_cond_dict(text=text, speaker=speaker, language="en-us")
+    cond_dict = make_cond_dict(text=text, **kwargs)
+    print(f"cond_dict: {cond_dict}")
     conditioning = model.prepare_conditioning(cond_dict)
     codes = model.generate(conditioning)
     audio = model.autoencoder.decode(codes).cpu()
@@ -243,16 +235,12 @@ def apply_temporal_compensation(audio_chunk, chunk_label, compensation_strength=
 
         for ch in range(channels):
             channel_data = audio_chunk[ch]
-            compensated_channel = _apply_compensation_to_channel(
-                channel_data, chunk_label, compensation_strength
-            )
+            compensated_channel = _apply_compensation_to_channel(channel_data, chunk_label, compensation_strength)
             compensated_channels.append(compensated_channel)
 
         return torch.stack(compensated_channels, dim=0)
     else:
-        return _apply_compensation_to_channel(
-            audio_chunk, chunk_label, compensation_strength
-        )
+        return _apply_compensation_to_channel(audio_chunk, chunk_label, compensation_strength)
 
 
 def _apply_compensation_to_channel(audio_data, chunk_label, compensation_strength):
@@ -282,9 +270,7 @@ def _apply_compensation_to_channel(audio_data, chunk_label, compensation_strengt
     return compensated_audio
 
 
-def normalize_audio_chunks(
-    audio_chunks, apply_compensation=True, compensation_strength=0.4
-):
+def normalize_audio_chunks(audio_chunks, apply_compensation=True, compensation_strength=0.4):
     """Normalize all chunks to consistent volume with optional temporal compensation"""
     if not audio_chunks:
         return audio_chunks
@@ -297,9 +283,7 @@ def normalize_audio_chunks(
         logger.info("Applying temporal compensation to counteract volume decay...")
         compensated_chunks = []
         for i, chunk in enumerate(audio_chunks):
-            compensated_chunk = apply_temporal_compensation(
-                chunk, f"Chunk {i+1}", compensation_strength
-            )
+            compensated_chunk = apply_temporal_compensation(chunk, f"Chunk {i+1}", compensation_strength)
             compensated_chunks.append(compensated_chunk)
 
         # Log statistics after compensation but before normalization
@@ -364,7 +348,31 @@ def concatenate_chunks(audio_chunks, sample_rate):
     return torch.cat(result, dim=1)
 
 
-def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
+def resolve_pitch_expressive(expressiveness: float):
+    """Resolve pitch variation string to numerical value"""
+    expressiveness = min(max(expressiveness, 0), 1)
+    pitch_variation_min = 20
+    pitch_variation_max = 100
+    return pitch_variation_min + (pitch_variation_max - pitch_variation_min) * expressiveness
+
+
+def resolve_speaking_rate(speaking_rate: float):
+    """Resolve speaking rate string to numerical value"""
+    speaking_rate = min(max(speaking_rate, 0), 1)
+    speaking_rate_min = 10
+    speaking_rate_max = 30
+    return speaking_rate_min + (speaking_rate_max - speaking_rate_min) * speaking_rate
+
+
+def process_tts(
+    text: str,
+    audio_file: str,
+    output_file: str,
+    seed: int,
+    emotion: list[float],
+    expressiveness: float,
+    speaking_rate: float,
+):
     """Main TTS processing function"""
     logger.info("Starting TTS processing")
     logger.info("Text length: %d characters", len(text))
@@ -372,6 +380,7 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
 
     # Load model and create speaker embedding
     logger.info("Loading model...")
+    torch.manual_seed(seed)
     model = load_model()
     logger.info("Creating speaker embedding...")
     speaker = create_speaker_embedding(model, audio_file)
@@ -381,13 +390,24 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
     chunks = split_text_into_chunks(text)
     logger.info("Created %d text chunks", len(chunks))
 
+    expressiveness = resolve_pitch_expressive(expressiveness)
+    speaking_rate = resolve_speaking_rate(speaking_rate)
+
     logger.info("Generating audio chunks...")
     audio_chunks = []
+
+    model_kwargs = {
+        "speaker": speaker,
+        "emotion": emotion,
+        "pitch_std": expressiveness,
+        "speaking_rate": speaking_rate,
+        "language": "en-us",
+    }
 
     for i, chunk in enumerate(chunks):
         chunk_preview = chunk[:50] + ("..." if len(chunk) > 50 else "")
         logger.info("Processing chunk %d/%d: '%s'", i + 1, len(chunks), chunk_preview)
-        audio = generate_audio_chunk(model, chunk, speaker, seed)
+        audio = generate_audio_chunk(model, chunk, **model_kwargs)
         audio_chunks.append(audio)
 
     logger.info("Audio generation completed")
@@ -395,9 +415,7 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
     # Normalize and concatenate
     logger.info("Starting audio normalization...")
     # Apply temporal compensation with moderate strength (0.4 = 40% compensation)
-    normalized_chunks = normalize_audio_chunks(
-        audio_chunks, apply_compensation=True, compensation_strength=0.4
-    )
+    normalized_chunks = normalize_audio_chunks(audio_chunks, apply_compensation=True, compensation_strength=0.4)
 
     logger.info("Concatenating audio chunks...")
     final_audio = concatenate_chunks(normalized_chunks, model.autoencoder.sampling_rate)
@@ -415,9 +433,7 @@ def process_tts(text: str, audio_file: str, output_file: str, seed: int = 42):
 
     # Save to file
     logger.info("Saving audio to: %s", output_file)
-    torchaudio.save(
-        output_file, final_audio, model.autoencoder.sampling_rate, format="mp3"
-    )
+    torchaudio.save(output_file, final_audio, model.autoencoder.sampling_rate, format="mp3")
     logger.info("TTS processing completed successfully")
     print(f"Audio saved to: {output_file}")
 
@@ -430,7 +446,17 @@ def main():
     parser.add_argument("--text", required=True, help="Text to convert to speech")
     parser.add_argument("--audio_file", required=True, help="Reference audio file")
     parser.add_argument("--output_file", required=True, help="Output audio file")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--seed", type=int, required=True, help="Random seed")
+    parser.add_argument("--happiness", type=float, required=True, help="Happiness emotion level (0.0 to 1.0)")
+    parser.add_argument("--sadness", type=float, required=True, help="Sadness emotion level (0.0 to 1.0)")
+    parser.add_argument("--disgust", type=float, required=True, help="Disgust emotion level (0.0 to 1.0)")
+    parser.add_argument("--fear", type=float, required=True, help="Fear emotion level (0.0 to 1.0)")
+    parser.add_argument("--surprise", type=float, required=True, help="Surprise emotion level (0.0 to 1.0)")
+    parser.add_argument("--anger", type=float, required=True, help="Anger emotion level (0.0 to 1.0)")
+    parser.add_argument("--other", type=float, required=True, help="Other emotion level (0.0 to 1.0)")
+    parser.add_argument("--neutral", type=float, required=True, help="Neutral emotion level (0.0 to 1.0)")
+    parser.add_argument("--expressiveness", type=float, required=True, help="Expressive level (0.0 to 1.0)")
+    parser.add_argument("--speaking_rate", type=float, required=True, help="Speaking rate (0.0 to 1.0)")
 
     args = parser.parse_args()
 
@@ -444,7 +470,26 @@ def main():
     )
 
     try:
-        process_tts(args.text, args.audio_file, args.output_file, args.seed)
+        emotion = [
+            args.happiness,
+            args.sadness,
+            args.disgust,
+            args.fear,
+            args.surprise,
+            args.anger,
+            args.other,
+            args.neutral,
+        ]
+        print(emotion)
+        process_tts(
+            args.text,
+            args.audio_file,
+            args.output_file,
+            args.seed,
+            emotion,
+            args.expressiveness,
+            args.speaking_rate,
+        )
         sys.exit(0)
     except (RuntimeError, FileNotFoundError, ValueError) as e:
         print(f"Error: {e}")

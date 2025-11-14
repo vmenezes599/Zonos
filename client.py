@@ -8,7 +8,7 @@ import requests
 class Client:
     """Client class for sending text-to-speech requests to a server."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8189):
+    def __init__(self, host: str = "127.0.0.1", port: int = 9999):
         """
         Initialize the TTS client.
 
@@ -27,6 +27,16 @@ class Client:
         reference_audio_path: str | Path,
         seed: int,
         output_path: str | Path | None = None,
+        happiness: float = 0.3077,
+        sadness: float = 0.0256,
+        disgust: float = 0.0256,
+        fear: float = 0.0256,
+        surprise: float = 0.0256,
+        anger: float = 0.0256,
+        other: float = 0.2564,
+        neutral: float = 0.3077,
+        expressiveness: float = 0.5,
+        speaking_rate: float = 0.375,
     ) -> bytes | bool | None:
         """
         Synthesize speech from text using a reference audio file.
@@ -36,6 +46,16 @@ class Client:
             reference_audio_path: Path to reference audio file
             seed: Random seed for generation
             output_path: Optional output path to save the audio file
+            happiness: Happiness emotion level (0.0 to 1.0)
+            sadness: Sadness emotion level (0.0 to 1.0)
+            disgust: Disgust emotion level (0.0 to 1.0)
+            fear: Fear emotion level (0.0 to 1.0)
+            surprise: Surprise emotion level (0.0 to 1.0)
+            anger: Anger emotion level (0.0 to 1.0)
+            other: Other emotion level (0.0 to 1.0)
+            neutral: Neutral emotion level (0.0 to 1.0)
+            expressiveness: Expressive level (0.0 to 1.0)
+            speaking_rate: Speaking rate (0.0 to 1.0)
 
         Returns:
             If output_path is provided, returns True on success, False on failure.
@@ -63,15 +83,23 @@ class Client:
         data = {
             "text": text,
             "seed": seed,
+            "happiness": happiness,
+            "sadness": sadness,
+            "disgust": disgust,
+            "fear": fear,
+            "surprise": surprise,
+            "anger": anger,
+            "other": other,
+            "neutral": neutral,
+            "expressiveness": expressiveness,
+            "speaking_rate": speaking_rate,
         }
 
         try:
             # Open and send the audio file
             with open(reference_audio, "rb") as audio_file:
                 files = {"reference_audio_file": audio_file}
-                response = requests.post(
-                    url, data=data, files=files, stream=True, timeout=self.default_timeout
-                )
+                response = requests.post(url, data=data, files=files, stream=True, timeout=self.default_timeout)
 
                 if response.status_code == 200:
                     if output_path:
@@ -108,9 +136,7 @@ class Client:
 
 def main():
     """Main function to send a request to the TTS server via command line."""
-    parser = argparse.ArgumentParser(
-        description="TTS Client - Send text-to-speech requests"
-    )
+    parser = argparse.ArgumentParser(description="TTS Client - Send text-to-speech requests")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Server host")
     parser.add_argument("--port", type=int, default=8189, help="Server port")
     parser.add_argument("--text", type=str, required=True, help="Text to synthesize")
@@ -120,12 +146,18 @@ def main():
         required=True,
         help="Path to reference audio file",
     )
-    parser.add_argument(
-        "--seed", type=int, required=True, help="Random seed for generation"
-    )
-    parser.add_argument(
-        "--output_path", type=str, required=True, help="Output path for generated audio"
-    )
+    parser.add_argument("--seed", type=int, required=True, help="Random seed for generation")
+    parser.add_argument("--output_path", type=str, required=True, help="Output path for generated audio")
+    parser.add_argument("--happiness", type=float, default=0.3077, help="Happiness emotion level (0.0 to 1.0)")
+    parser.add_argument("--sadness", type=float, default=0.0256, help="Sadness emotion level (0.0 to 1.0)")
+    parser.add_argument("--disgust", type=float, default=0.0256, help="Disgust emotion level (0.0 to 1.0)")
+    parser.add_argument("--fear", type=float, default=0.0256, help="Fear emotion level (0.0 to 1.0)")
+    parser.add_argument("--surprise", type=float, default=0.0256, help="Surprise emotion level (0.0 to 1.0)")
+    parser.add_argument("--anger", type=float, default=0.0256, help="Anger emotion level (0.0 to 1.0)")
+    parser.add_argument("--other", type=float, default=0.2564, help="Other emotion level (0.0 to 1.0)")
+    parser.add_argument("--neutral", type=float, default=0.3077, help="Neutral emotion level (0.0 to 1.0)")
+    parser.add_argument("--expressiveness", type=float, default=0.5, help="Expressive level (0.0 to 1.0)")
+    parser.add_argument("--speaking_rate", type=float, default=0.375, help="Speaking rate (0.0 to 1.0)")
     args = parser.parse_args()
 
     # Use the Client class for CLI functionality
@@ -135,6 +167,16 @@ def main():
         reference_audio_path=args.reference_audio_path,
         seed=args.seed,
         output_path=args.output_path,
+        happiness=args.happiness,
+        sadness=args.sadness,
+        disgust=args.disgust,
+        fear=args.fear,
+        surprise=args.surprise,
+        anger=args.anger,
+        other=args.other,
+        neutral=args.neutral,
+        expressiveness=args.expressiveness,
+        speaking_rate=args.speaking_rate,
     )
 
     if not success:

@@ -1,12 +1,13 @@
 """Test script for the TTS Client class."""
 
+import random
 from client import Client
 
 
 def main():
     """Main function to test the TTS client with multiple requests."""
     # Initialize the client
-    client = Client(host="127.0.0.1", port=8189)
+    client = Client(host="127.0.0.1", port=9999)
 
     # Test connection first
     if not client.test_connection():
@@ -33,14 +34,70 @@ def main():
 
     text_list = [simple_text]
 
+    kwargs = {
+        "happiness": 0.3077,
+        "sadness": 0.0256,
+        "disgust": 0.0256,
+        "fear": 0.0256,
+        "surprise": 0.0256,
+        "anger": 0.0256,
+        "other": 0.2564,
+        "neutral": 0.3077,
+        "expressiveness": 0.5,
+        "speaking_rate": 0.375,
+    }
+
+    kwargs_2 = {
+        "happiness": 0.6,
+        "sadness": 0.0,
+        "disgust": 0.4,
+        "fear": 0.0,
+        "surprise": 0.1,
+        "anger": 0.0,
+        "other": 0.1,
+        "neutral": 0.2,
+        "expressiveness": 0.5,
+        "speaking_rate": 0.5,
+    }
+
+    kwargs_3 = {
+        "happiness": 0.0,
+        "sadness": 0.0,
+        "disgust": 0.4,
+        "fear": 0.0,
+        "surprise": 0.1,
+        "anger": 1.0,
+        "other": 0.1,
+        "neutral": 0.2,
+        "expressiveness": 0.5,
+        "speaking_rate": 0.1,
+    }
+
+    kwargs_4 = {
+        "happiness": 0.1,
+        "sadness": 0.1,
+        "disgust": 0.4,
+        "fear": 1.0,
+        "surprise": 0.1,
+        "anger": 1.0,
+        "other": 0.1,
+        "neutral": 0.2,
+        "expressiveness": 0.5,
+        "speaking_rate": 0.2,
+    }
+
     # Create test requests
     test_requests = []
     for i, text in enumerate(text_list):
         test_request = {
             "text": text,
-            "reference_audio_path": "/home/vitor/projects/DATABASES/AI-Video-Default-Assets/voices/ElevenLabs_George.mp3",
-            "seed": 13042385551431025181,
+            "reference_audio_path": "/home/vitor/projects/DATABASES/AI-Video-Default-Assets/voices/ElevenLabs_Clyde.mp3",
+            "seed": random.randint(0, 2**32 - 1),
             "output_path": f"output/test_audio_{i}.mp3",
+            # **kwargs,
+            # **kwargs_2,
+            # **kwargs_3,
+            **kwargs_4,
         }
         test_requests.append(test_request)
 
@@ -54,6 +111,16 @@ def main():
             reference_audio_path=request["reference_audio_path"],
             seed=request["seed"],
             output_path=request["output_path"],
+            happiness=request["happiness"],
+            sadness=request["sadness"],
+            disgust=request["disgust"],
+            fear=request["fear"],
+            surprise=request["surprise"],
+            anger=request["anger"],
+            other=request["other"],
+            neutral=request["neutral"],
+            expressiveness=request["expressiveness"],
+            speaking_rate=request["speaking_rate"],
         )
 
         if success:

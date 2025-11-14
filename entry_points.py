@@ -15,6 +15,16 @@ async def process_tts_with_subprocess(
     text: str,
     reference_audio_file: UploadFile,
     seed: int,
+    happiness: float,
+    sadness: float,
+    disgust: float,
+    fear: float,
+    surprise: float,
+    anger: float,
+    other: float,
+    neutral: float,
+    expressiveness: float,
+    speaking_rate: float,
     background_tasks: BackgroundTasks,
 ):
     """Process TTS using subprocess for automatic resource cleanup"""
@@ -48,6 +58,26 @@ async def process_tts_with_subprocess(
             temp_audio_output.name,
             "--seed",
             str(seed),
+            "--happiness",
+            str(happiness),
+            "--sadness",
+            str(sadness),
+            "--disgust",
+            str(disgust),
+            "--fear",
+            str(fear),
+            "--surprise",
+            str(surprise),
+            "--anger",
+            str(anger),
+            "--other",
+            str(other),
+            "--neutral",
+            str(neutral),
+            "--expressiveness",
+            str(expressiveness),
+            "--speaking_rate",
+            str(speaking_rate),
         ]
 
         logging.info("Running TTS subprocess: %s", " ".join(cmd))
@@ -61,11 +91,13 @@ async def process_tts_with_subprocess(
         )
 
         try:
-            _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # 5 minute timeout
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # 5 minute timeout
         except asyncio.TimeoutError as e:
             process.kill()
             await process.wait()
             raise subprocess.TimeoutExpired(cmd, 300) from e
+
+        logging.info(stdout.decode("utf-8") if stdout else "")
 
         if process.returncode != 0:
             stderr_text = stderr.decode("utf-8") if stderr else ""
@@ -131,9 +163,34 @@ async def inference_sft(
     text: str = Form(),
     reference_audio_file: UploadFile = File(),
     seed: int = Form(),
+    happiness: float = Form(),
+    sadness: float = Form(),
+    disgust: float = Form(),
+    fear: float = Form(),
+    surprise: float = Form(),
+    anger: float = Form(),
+    other: float = Form(),
+    neutral: float = Form(),
+    expressiveness: float = Form(),
+    speaking_rate: float = Form(),
 ):
     """Text-to-Speech Inference endpoint using subprocess"""
     return await asyncio.wait_for(
-        process_tts_with_subprocess(text, reference_audio_file, seed, background_tasks),
+        process_tts_with_subprocess(
+            text,
+            reference_audio_file,
+            seed,
+            happiness,
+            sadness,
+            disgust,
+            fear,
+            surprise,
+            anger,
+            other,
+            neutral,
+            expressiveness,
+            speaking_rate,
+            background_tasks,
+        ),
         timeout=310,
     )
