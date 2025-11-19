@@ -91,7 +91,7 @@ def main():
     for i, text in enumerate(text_list):
         test_request = {
             "text": text,
-            "reference_audio_path": "/home/vitor/projects/DATABASES/AI-Video-Default-Assets/voices/ElevenLabs_Clyde.mp3",
+            "reference_audio_path": "/home/vitor/projects/DATABASES/CT_default_assets/voices/ElevenLabs_Clyde.mp3",
             "seed": random.randint(0, 2**32 - 1),
             "output_path": f"output/test_audio_{i}.mp3",
             # **kwargs,
