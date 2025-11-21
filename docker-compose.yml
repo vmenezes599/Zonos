@@ -15,7 +15,6 @@ services:
       GRADIO_SHARE: "False"
     networks:
       - services_network
-      - dev_services_network
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "/app/health-check.sh" ]
@@ -34,6 +33,3 @@ networks:
   services_network:
     external: true
     name: services_network
-  dev_services_network:
-    external: true
-    name: dev_services_network
