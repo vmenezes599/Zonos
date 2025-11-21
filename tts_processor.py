@@ -141,7 +141,7 @@ def analyze_temporal_decay(audio_chunk, chunk_label):
 
 def load_model():
     """Load the TTS model"""
-    return Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=DEFAULT_DEVICE)
+    return Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device=str(DEFAULT_DEVICE))
 
 
 def create_speaker_embedding(model: Zonos, audio_file: str):
@@ -156,11 +156,14 @@ def create_speaker_embedding(model: Zonos, audio_file: str):
 
 def split_text_into_chunks(text: str, max_words: int = 50):
     """Split text into manageable chunks while preserving original punctuation"""
+    stripped_text = text.strip()
+    if not stripped_text:
+        return []
 
     # Split on sentence boundaries while preserving the original punctuation
     # This regex finds sentence endings (., !, ?) followed by whitespace or end of string
     sentence_pattern = r"([.!?])\s*"
-    parts = re.split(sentence_pattern, text)
+    parts = re.split(sentence_pattern, stripped_text)
 
     # Reconstruct sentences with their original punctuation
     sentences = []
@@ -194,9 +197,9 @@ def split_text_into_chunks(text: str, max_words: int = 50):
     if current_chunk:
         chunks.append(current_chunk.strip())
 
-    prefixed_chunks = [chunk for chunk in chunks] if chunks else [text.strip()]
+    prefixed_chunks = [chunk for chunk in chunks] if chunks else [stripped_text]
 
-    return prefixed_chunks
+    return [chunk for chunk in prefixed_chunks if chunk.strip()]
 
 
 def generate_audio_chunk(model: Zonos, text: str, **kwargs):
@@ -378,20 +381,22 @@ def process_tts(
     logger.info("Text length: %d characters", len(text))
     logger.info("Seed: %d", seed)
 
-    # Load model and create speaker embedding
+    # Split text and generate audio
+    logger.info("Splitting text into chunks...")
+    chunks = split_text_into_chunks(text)
+    if not chunks:
+        raise ValueError("No text provided for TTS processing (empty or whitespace-only input)")
+    logger.info("Created %d text chunks", len(chunks))
+
+    expressiveness = resolve_pitch_expressive(expressiveness)
+    speaking_rate = resolve_speaking_rate(speaking_rate)
+
+    # Load model and create speaker embedding only after validating text
     logger.info("Loading model...")
     torch.manual_seed(seed)
     model = load_model()
     logger.info("Creating speaker embedding...")
     speaker = create_speaker_embedding(model, audio_file)
-
-    # Split text and generate audio
-    logger.info("Splitting text into chunks...")
-    chunks = split_text_into_chunks(text)
-    logger.info("Created %d text chunks", len(chunks))
-
-    expressiveness = resolve_pitch_expressive(expressiveness)
-    speaking_rate = resolve_speaking_rate(speaking_rate)
 
     logger.info("Generating audio chunks...")
     audio_chunks = []
@@ -480,7 +485,7 @@ def main():
             args.other,
             args.neutral,
         ]
-        print(emotion)
+
         process_tts(
             args.text,
             args.audio_file,
