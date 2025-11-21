@@ -279,7 +279,7 @@ def normalize_audio_chunks(audio_chunks, apply_compensation=True, compensation_s
         return audio_chunks
 
     # Log statistics before normalization
-    log_audio_stats(audio_chunks, "BEFORE Normalization")
+    # (audio_chunks, "BEFORE Normalization")
 
     # Apply temporal compensation first if enabled
     if apply_compensation:
@@ -290,7 +290,7 @@ def normalize_audio_chunks(audio_chunks, apply_compensation=True, compensation_s
             compensated_chunks.append(compensated_chunk)
 
         # Log statistics after compensation but before normalization
-        log_audio_stats(compensated_chunks, "AFTER Compensation (BEFORE Normalization)")
+        # log_audio_stats(compensated_chunks, "AFTER Compensation (BEFORE Normalization)")
         audio_chunks = compensated_chunks
 
     logger.info("Normalizing to target RMS: %.6f", GLOBAL_TARGET_RMS)
@@ -329,7 +329,7 @@ def normalize_audio_chunks(audio_chunks, apply_compensation=True, compensation_s
             normalized_chunks.append(chunk)
 
     # Log statistics after normalization
-    log_audio_stats(normalized_chunks, "AFTER Normalization")
+    # log_audio_stats(normalized_chunks, "AFTER Normalization")
 
     return normalized_chunks
 
