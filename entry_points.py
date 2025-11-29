@@ -80,7 +80,7 @@ async def process_tts_with_subprocess(
             str(speaking_rate),
         ]
 
-        logging.info("Running TTS subprocess: %s", " ".join(cmd))
+        logging.info(f"Running TTS subprocess: {' '.join(cmd)}")
 
         # Run subprocess asynchronously to avoid blocking the event loop
         # This allows health checks and other requests to be processed during TTS generation
@@ -101,13 +101,13 @@ async def process_tts_with_subprocess(
 
         if process.returncode != 0:
             stderr_text = stderr.decode("utf-8") if stderr else ""
-            logging.error("TTS subprocess failed: %s", stderr_text)
+            logging.error(f"TTS subprocess failed: {stderr_text}")
             raise HTTPException(status_code=500, detail="TTS processing failed")
 
         # Log any stderr output even on success (warnings, etc.)
         if stderr:
             stderr_text = stderr.decode("utf-8")
-            logging.info("TTS subprocess stderr: %s", stderr_text)
+            logging.info(f"TTS subprocess stderr: {stderr_text}")
 
         # Check if output file was created
         if not os.path.exists(temp_audio_output.name):
@@ -135,7 +135,7 @@ async def process_tts_with_subprocess(
         )
         raise HTTPException(status_code=504, detail="TTS processing timed out") from e
     except Exception as e:
-        logging.error("TTS processing error: %s", e)
+        logging.error(f"TTS processing error: {e}")
         cleanup_temp_files(
             [
                 temp_audio_input.name if temp_audio_input else None,
@@ -151,9 +151,9 @@ def cleanup_temp_files(file_paths):
         if file_path and os.path.exists(file_path):
             try:
                 os.unlink(file_path)
-                logging.info("Cleaned up temp file: %s", file_path)
+                logging.info(f"Cleaned up temp file: {file_path}")
             except OSError as e:
-                logging.warning("Failed to clean up temp file %s: %s", file_path, e)
+                logging.warning(f"Failed to clean up temp file {file_path}: {e}")
 
 
 @router.get("/tts")

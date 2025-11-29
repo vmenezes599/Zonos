@@ -35,11 +35,11 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
     pass
 
     if not audio_chunks:
-        logger.info("%s: No chunks to analyze", label)
+        logger.info(f"{label}: No chunks to analyze")
         return
 
-    logger.info("=== %s Analysis ===", label)
-    logger.info("Total chunks: %d", len(audio_chunks))
+    logger.info(f"=== {label} Analysis ===")
+    logger.info(f"Total chunks: {len(audio_chunks)}")
 
     # Sample random chunks or use all if fewer than sample_count
     sample_indices = random.sample(range(len(audio_chunks)), min(sample_count, len(audio_chunks)))
@@ -71,8 +71,8 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
     min_rms = min(all_rms)
     max_rms = max(all_rms)
 
-    logger.info("Overall RMS - Avg: %.6f, Min: %.6f, Max: %.6f", avg_rms, min_rms, max_rms)
-    logger.info("=== End %s Analysis ===", label)
+    logger.info(f"Overall RMS - Avg: {avg_rms:.6f}, Min: {min_rms:.6f}, Max: {max_rms:.6f}")
+    logger.info(f"=== End {label} Analysis ===")
 
 
 def analyze_temporal_decay(audio_chunk, chunk_label):
@@ -111,32 +111,14 @@ def analyze_temporal_decay(audio_chunk, chunk_label):
         duration_end = end_idx / 24000
 
         logger.info(
-            "  %s Segment %d (%.2fs-%.2fs): RMS=%.6f, Max=%.6f",
-            chunk_label,
-            i + 1,
-            duration_start,
-            duration_end,
-            rms,
-            max_val,
+            f"  {chunk_label} Segment {i + 1} ({duration_start:.2f}s-{duration_end:.2f}s): RMS={rms:.6f}, Max={max_val:.6f}",
         )  # Calculate decay metrics
     if len(segment_rms) > 1:
         rms_decay = (segment_rms[0] - segment_rms[-1]) / segment_rms[0] * 100  # Percentage decay
         max_decay = (segment_max[0] - segment_max[-1]) / segment_max[0] * 100
 
-        logger.info(
-            "  %s RMS Decay: %.1f%% (from %.6f to %.6f)",
-            chunk_label,
-            rms_decay,
-            segment_rms[0],
-            segment_rms[-1],
-        )
-        logger.info(
-            "  %s Max Decay: %.1f%% (from %.6f to %.6f)",
-            chunk_label,
-            max_decay,
-            segment_max[0],
-            segment_max[-1],
-        )
+        logger.info(f"  {chunk_label} RMS Decay: {rms_decay:.1f}% (from {segment_rms[0]:.6f} to {segment_rms[-1]:.6f})")
+        logger.info(f"  {chunk_label} Max Decay: {max_decay:.1f}% (from {segment_max[0]:.6f} to {segment_max[-1]:.6f})")
 
 
 def load_model():
@@ -264,10 +246,7 @@ def _apply_compensation_to_channel(audio_data, chunk_label, compensation_strengt
 
     # Log the compensation applied
     logger.info(
-        "  %s: Applied temporal compensation (%.1fx to %.1fx)",
-        chunk_label,
-        gain_start,
-        gain_end,
+        f"  {chunk_label}: Applied temporal compensation ({gain_start:.1f}x to {gain_end:.1f}x)",
     )
 
     return compensated_audio
@@ -411,7 +390,7 @@ def process_tts(
 
     for i, chunk in enumerate(chunks):
         chunk_preview = chunk[:50] + ("..." if len(chunk) > 50 else "")
-        logger.info("Processing chunk %d/%d: '%s'", i + 1, len(chunks), chunk_preview)
+        logger.info(f"Processing chunk {i + 1}/{len(chunks)}: '{chunk_preview}'")
         audio = generate_audio_chunk(model, chunk, **model_kwargs)
         audio_chunks.append(audio)
 
@@ -437,7 +416,7 @@ def process_tts(
     )
 
     # Save to file
-    logger.info("Saving audio to: %s", output_file)
+    logger.info(f"Saving audio to: {output_file}")
     torchaudio.save(output_file, final_audio, model.autoencoder.sampling_rate, format="mp3")
     logger.info("TTS processing completed successfully")
     print(f"Audio saved to: {output_file}")
