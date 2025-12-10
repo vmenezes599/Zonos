@@ -1,0 +1,37 @@
+services:
+  dev_zonos_server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dev_zonos_server
+    labels:
+      autoheal: "true"
+    command: [ "python3", "-m", "generic_ai_server_client.server", "--port", "8189" ]
+    gpus: all
+    environment:
+      PYTHONPATH: /app
+      NVIDIA_VISIBLE_DEVICES: GPU-bfe56291-e722-318b-fbc0-526eb8393bf3
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      GRADIO_SHARE: "False"
+    networks:
+      - dev_services_network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "/app/health-check.sh" ]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 10s
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=10g
+      - /var/tmp:rw,exec,nosuid,size=10g
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  dev_services_network:
+    name: dev_services_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

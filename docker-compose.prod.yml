@@ -1,12 +1,9 @@
 services:
   zonos_server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/vmenezes599/zonos_server:v0.1.0
     container_name: zonos_server
     labels:
       autoheal: "true"
-    command: [ "python3", "-m", "generic_ai_server_client.server", "--port", "8189" ]
     gpus: all
     environment:
       PYTHONPATH: /app
@@ -22,7 +19,6 @@ services:
       timeout: 30s
       retries: 3
       start_period: 10s
-    user: "1000:1000"
     tmpfs:
       - /tmp:rw,exec,nosuid,size=10g
       - /var/tmp:rw,exec,nosuid,size=10g
@@ -31,5 +27,8 @@ services:
 
 networks:
   services_network:
-    external: true
     name: services_network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

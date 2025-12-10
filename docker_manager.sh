@@ -1,65 +1,35 @@
 #!/bin/bash
 
-# TTS Server - Docker Management Script
-# Usage: ./manage.sh [start|stop|restart|clean]
-
-DOCKER_COMPOSE_FILE="docker-compose.yml"
+DOCKER_COMPOSE_FILE="docker-compose.prod.yml"
+DEV_DOCKER_COMPOSE_FILE="docker-compose.dev.yml"
 
 case "$1" in
-status)
-    echo " Service Status:"
-    docker compose -f $DOCKER_COMPOSE_FILE ps --format table
-    echo ""
-    echo "🌐 Network Info:"
-    docker network ls | grep tts_server_network
-    ;;
-
-logs | l)
-    echo "📜 Viewing TTS Server logs..."
-    docker compose -f $DOCKER_COMPOSE_FILE logs -f zonos_server
-    ;;
-
-stop | st)
-    echo "Stopping TTS Server services..."
-    docker compose -f $DOCKER_COMPOSE_FILE down
-    echo "✅ Services stopped successfully!"
-    ;;
-
-clean | c)
-    echo "🧹 Cleaning up Docker resources..."
-    docker compose -f $DOCKER_COMPOSE_FILE down -v
-    docker system prune -f
-    echo "✅ Cleanup completed!"
-    ;;
 
 build | b)
-    echo "Building TTS Server..."
-    docker compose -f $DOCKER_COMPOSE_FILE stop zonos_server
-    docker compose -f $DOCKER_COMPOSE_FILE rm -f zonos_server
-    docker compose -f $DOCKER_COMPOSE_FILE build zonos_server --no-cache
-    docker compose -f $DOCKER_COMPOSE_FILE up -d zonos_server
-    echo "✅ TTS Server build completed!"
+    echo "🔨 Building Zonos..."
+    docker compose -f $DOCKER_COMPOSE_FILE down
+    docker compose -f $DOCKER_COMPOSE_FILE build
+    docker compose -f $DOCKER_COMPOSE_FILE up -d
+    echo "✅ Build completed!"
     ;;
 
-start | s)
-    echo "🚀 Starting TTS Server..."
-    docker compose -f $DOCKER_COMPOSE_FILE up -d zonos_server
-    echo "✅ TTS Server started successfully!"
+dev_build | db)
+    echo "🔨 Building dev_Zonos..."
+    docker compose -f $DEV_DOCKER_COMPOSE_FILE down
+    docker compose -f $DEV_DOCKER_COMPOSE_FILE build --no-cache
+    docker compose -f $DEV_DOCKER_COMPOSE_FILE up -d
+    echo "✅ Build completed!"
     ;;
 
 *)
-    echo "TTS Server - Docker Management"
+    echo "Zonos Server - Docker Management"
     echo ""
     echo "Usage: $0 [command]"
     echo ""
-    echo "📋 BASIC COMMANDS (PRODUCTION):"
-    echo "  start|s                         - Start"
-    echo "  stop|st                         - Stop"
-    echo "  status                          - Status"
-    echo ""
     echo "🔨 BUILD:"
-    echo "  build|b                         - Build"
-    echo "🧹 CLEAN:"
-    echo "  clean|c                         - Cleanup resources"
+    echo "  b/build        - Build Zonos"
+    echo "  db/dev_build    - Build Zonos in development mode"
+    echo ""
+    echo ""
     ;;
 esac
