@@ -1,6 +1,6 @@
 services:
   zonos_server:
-    image: ghcr.io/vmenezes599/zonos_server:v0.1.0
+    image: ghcr.io/vmenezes599/ct_zonos_server:v0.1.0
     container_name: zonos_server
     labels:
       autoheal: "true"
