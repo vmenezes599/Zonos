@@ -1,32 +1,29 @@
-# Git files
+# VCS
 .git
 .gitignore
+.github
 
-# Python cache and build files
-__pycache__
-*.pyc
-*.pyo
+# Python build artifacts and caches
+__pycache__/
+*.py[cod]
 *.pyd
+*.so
+*.dylib
 .Python
-build
-develop-eggs
-dist
-downloads
-eggs
-.eggs
-lib
-lib64
-parts
-sdist
-var
-wheels
-*.egg-info
-.installed.cfg
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+*.egg-info/
 *.egg
+.eggs/
+.installed.cfg
+*.manifest
 
 # Virtual environments
-.env
 .venv
+.env
+.envrc
 .zonos-venv
 env/
 venv/
@@ -34,40 +31,35 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE files
+# Tooling caches
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local data and dev-only content
+CommandServerRoot_Test/
+docs/
+tests/
+*.log
+*.tmp
+*.temp
+docker-compose*.yml
+docker_*.sh
+
+# IDE / OS noise
 .vscode
 .idea
 *.swp
 *.swo
 *~
-
-# OS files
 .DS_Store
 Thumbs.db
 
-# Testing
-.coverage
-.pytest_cache
-htmlcov/
-.tox/
-.nox/
-
-# Local data that will be mounted as volumes
-CommandServerRoot_Test/
-
-# Documentation and development files
-docs/
-*.md
-*.spec
-# Exclude all .txt files except requirements.txt
-*.txt
-!requirements.txt
-
-# Frontend build files (if separate)
+# Frontend artifacts (if present)
 frontend/node_modules/
 frontend/build/
 frontend/dist/
-
-# Temporary files
-*.tmp
-*.temp
