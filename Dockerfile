@@ -51,6 +51,13 @@ RUN pip install --no-cache-dir --no-index --find-links /tmp/wheels zonos[compile
 COPY CT_generic_server_client ./CT_generic_server_client
 COPY entry_points.py tts_processor.py health-check.sh ./
 
+# Compile Python files and remove source
+RUN python -m compileall -b -q --invalidation-mode unchecked-hash /app/entry_points.py /app/tts_processor.py /app/CT_generic_server_client && \
+    find /app/CT_generic_server_client -type d -name '__pycache__' -prune -exec rm -rf '{}' + && \
+    find /app -maxdepth 1 -type d -name '__pycache__' -prune -exec rm -rf '{}' + && \
+    rm -f /app/entry_points.py /app/tts_processor.py && \
+    find /app/CT_generic_server_client -type f -name '*.py' -delete
+
 RUN chmod +x /app/health-check.sh && \
     mkdir -p "$XDG_CACHE_HOME" "$TRITON_CACHE_DIR" && \
     chown -R ${APP_USER}:${APP_GROUP} "$XDG_CACHE_HOME" "$TRITON_CACHE_DIR"

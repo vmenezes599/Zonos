@@ -47,6 +47,9 @@ tests/
 *.log
 *.tmp
 *.temp
+
+# Docker scripts and compose files
+docker_*.sh
 docker-compose*.yml
 docker_*.sh
 

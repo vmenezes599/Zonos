@@ -44,12 +44,12 @@ async def process_tts_with_subprocess(
         temp_audio_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         temp_audio_output.close()
 
-        # Run TTS processor as subprocess
-        # Use absolute path to ensure it works regardless of working directory
-        tts_processor_path = "tts_processor.py"
+        # Run TTS processor as subprocess using module syntax
+        # This allows it to work with compiled .pyc files
         cmd = [
             sys.executable,
-            tts_processor_path,
+            "-m",
+            "tts_processor",
             "--text",
             text,
             "--audio_file",
