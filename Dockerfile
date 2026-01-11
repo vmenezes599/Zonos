@@ -1,11 +1,14 @@
-# Stage 1: Builder - Install dependencies
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel AS builder
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel AS zonos_server
+
+ENV XDG_CACHE_HOME=/tmp/.cache \
+    TRITON_CACHE_DIR=/tmp/triton_cache \
+    PYTHONUNBUFFERED=1
 
 RUN pip install --no-cache-dir uv
 
-# Install build-time dependencies
+# Install runtime dependencies
 RUN apt update && \
-    apt install -y --no-install-recommends curl && \
+    apt install -y --no-install-recommends espeak-ng curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,26 +28,6 @@ RUN python -m compileall -b -q --invalidation-mode unchecked-hash \
     find /app -maxdepth 1 -type d -name '__pycache__' -prune -exec rm -rf '{}' + && \
     rm -f /app/entry_points.py /app/tts_processor.py && \
     find /app/CT_generic_server_client -type f -name '*.py' -delete
-
-# Stage 2: Runtime - Clean image without build tools
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime AS zonos_server
-
-ENV XDG_CACHE_HOME=/tmp/.cache \
-    TRITON_CACHE_DIR=/tmp/triton_cache \
-    PYTHONUNBUFFERED=1
-
-# Install only runtime dependencies
-RUN apt update && \
-    apt install -y --no-install-recommends espeak-ng curl && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Copy entire conda environment from builder (includes all site-packages)
-COPY --from=builder /opt/conda /opt/conda
-
-# Copy compiled application from builder
-COPY --from=builder /app /app
 
 # Create user and set permissions
 RUN groupadd -g 1000 appgroup && \
