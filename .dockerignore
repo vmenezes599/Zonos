@@ -49,9 +49,10 @@ tests/
 *.temp
 
 # Docker scripts and compose files
+Dockerfile
 docker_*.sh
 docker-compose*.yml
-docker_*.sh
+docker_freeze_version
 
 # IDE / OS noise
 .vscode
