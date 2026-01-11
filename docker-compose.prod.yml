@@ -7,7 +7,7 @@ services:
     gpus: all
     environment:
       PYTHONPATH: /app
-      NVIDIA_VISIBLE_DEVICES: GPU-bfe56291-e722-318b-fbc0-526eb8393bf3
+      NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       GRADIO_SHARE: "False"
     networks:
