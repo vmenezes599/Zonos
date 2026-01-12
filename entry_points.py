@@ -97,21 +97,32 @@ async def process_tts_with_subprocess(
             await process.wait()
             raise subprocess.TimeoutExpired(cmd, 300) from e
 
-        logging.info(stdout.decode("utf-8") if stdout else "")
+        stdout_text = stdout.decode("utf-8") if stdout else ""
+        stderr_text = stderr.decode("utf-8") if stderr else ""
+
+        if stdout_text:
+            logging.info(f"TTS subprocess stdout: {stdout_text}")
 
         if process.returncode != 0:
-            stderr_text = stderr.decode("utf-8") if stderr else ""
-            logging.error(f"TTS subprocess failed: {stderr_text}")
-            raise HTTPException(status_code=500, detail="TTS processing failed")
+            error_detail = f"TTS subprocess failed with exit code {process.returncode}"
+            if stderr_text:
+                error_detail += f": {stderr_text.strip()}"
+            if stdout_text:
+                error_detail += f" | stdout: {stdout_text.strip()}"
+
+            logging.error(error_detail)
+            raise HTTPException(status_code=500, detail=error_detail)
 
         # Log any stderr output even on success (warnings, etc.)
-        if stderr:
-            stderr_text = stderr.decode("utf-8")
+        if stderr_text:
             logging.info(f"TTS subprocess stderr: {stderr_text}")
 
         # Check if output file was created
         if not os.path.exists(temp_audio_output.name):
-            raise HTTPException(status_code=500, detail="Output file not created")
+            error_detail = f"Output file not created at {temp_audio_output.name}"
+            if stderr_text:
+                error_detail += f". Subprocess stderr: {stderr_text.strip()}"
+            raise HTTPException(status_code=500, detail=error_detail)
 
         logging.info("TTS subprocess completed successfully")
 
@@ -126,23 +137,34 @@ async def process_tts_with_subprocess(
         )
 
     except subprocess.TimeoutExpired as e:
-        logging.error("TTS subprocess timed out")
+        error_detail = f"TTS subprocess timed out after {e.timeout}s"
+        logging.error(error_detail)
         cleanup_temp_files(
             [
                 temp_audio_input.name if temp_audio_input else None,
                 temp_audio_output.name if temp_audio_output else None,
             ]
         )
-        raise HTTPException(status_code=504, detail="TTS processing timed out") from e
+        raise HTTPException(status_code=504, detail=error_detail) from e
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (already have proper status codes and details)
+        cleanup_temp_files(
+            [
+                temp_audio_input.name if temp_audio_input else None,
+                temp_audio_output.name if temp_audio_output else None,
+            ]
+        )
+        raise
     except Exception as e:
-        logging.error(f"TTS processing error: {e}")
+        error_detail = f"TTS processing failed: {type(e).__name__}: {str(e)}"
+        logging.error(error_detail, exc_info=True)
         cleanup_temp_files(
             [
                 temp_audio_input.name if temp_audio_input else None,
                 temp_audio_output.name if temp_audio_output else None,
             ]
         )
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=error_detail) from e
 
 
 def cleanup_temp_files(file_paths):

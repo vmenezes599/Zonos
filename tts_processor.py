@@ -444,12 +444,14 @@ def main():
 
     args = parser.parse_args()
 
-    # Configure logging to output to stdout for better subprocess visibility
+    # Configure logging to output to both stdout and stderr
+    # Info/debug to stdout, warnings/errors to stderr for better subprocess visibility
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
+            logging.StreamHandler(sys.stderr),
         ],
     )
 
@@ -475,14 +477,37 @@ def main():
             args.speaking_rate,
         )
         sys.exit(0)
-    except (RuntimeError, FileNotFoundError, ValueError) as e:
-        print(f"Error: {e}")
+    except FileNotFoundError as e:
+        error_msg = f"FileNotFoundError: {e}"
+        logger.error(error_msg, exc_info=True)
+        print(error_msg, file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        error_msg = f"ValueError: {e}"
+        logger.error(error_msg, exc_info=True)
+        print(error_msg, file=sys.stderr)
+        sys.exit(1)
+    except RuntimeError as e:
+        # Catch CUDA errors, model loading errors, etc.
+        error_msg = f"RuntimeError: {e}"
+        logger.error(error_msg, exc_info=True)
+        print(error_msg, file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        # Catch file I/O errors, permission errors, etc.
+        error_msg = f"OSError: {e}"
+        logger.error(error_msg, exc_info=True)
+        print(error_msg, file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
-        print("Process interrupted by user")
-        sys.exit(1)
+        error_msg = "Process interrupted by user"
+        logger.warning(error_msg)
+        print(error_msg, file=sys.stderr)
+        sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:  # pylint: disable=broad-except
-        print(f"Unexpected error: {e}")
+        error_msg = f"{type(e).__name__}: {e}"
+        logger.error(error_msg, exc_info=True)
+        print(f"Unexpected error - {error_msg}", file=sys.stderr)
         sys.exit(1)
 
 
