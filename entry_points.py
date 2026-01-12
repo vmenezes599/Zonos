@@ -197,22 +197,27 @@ async def inference_sft(
     speaking_rate: float = Form(),
 ):
     """Text-to-Speech Inference endpoint using subprocess"""
-    return await asyncio.wait_for(
-        process_tts_with_subprocess(
-            text,
-            reference_audio_file,
-            seed,
-            happiness,
-            sadness,
-            disgust,
-            fear,
-            surprise,
-            anger,
-            other,
-            neutral,
-            expressiveness,
-            speaking_rate,
-            background_tasks,
-        ),
-        timeout=310,
-    )
+    try:
+        return await asyncio.wait_for(
+            process_tts_with_subprocess(
+                text,
+                reference_audio_file,
+                seed,
+                happiness,
+                sadness,
+                disgust,
+                fear,
+                surprise,
+                anger,
+                other,
+                neutral,
+                expressiveness,
+                speaking_rate,
+                background_tasks,
+            ),
+            timeout=310,
+        )
+    except asyncio.TimeoutError as e:
+        error_detail = "Request timeout: TTS processing took longer than 310 seconds"
+        logging.error(error_detail)
+        raise HTTPException(status_code=504, detail=error_detail) from e
