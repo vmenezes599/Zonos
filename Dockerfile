@@ -33,7 +33,7 @@ RUN python -m compileall -b -q --invalidation-mode unchecked-hash \
 RUN groupadd -g 1000 appgroup && \
     useradd -u 1000 -g appgroup -m appuser && \
     chown -R appuser:appgroup /app && \
-    chmod +x /app/health-check.sh && \
+    chmod +x /app/health-check.sh /app/entrypoint.sh && \
     mkdir -p "$XDG_CACHE_HOME" "$TRITON_CACHE_DIR" /.config/pulse && \
     chmod 777 "$XDG_CACHE_HOME" "$TRITON_CACHE_DIR" /.config /.config/pulse
 
@@ -41,4 +41,4 @@ USER appuser
 
 EXPOSE 8189
 
-CMD ["python3", "-m", "CT_generic_server_client.server", "--port", "8189"]
+ENTRYPOINT ["/app/entrypoint.sh"]
