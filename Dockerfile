@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel AS zonos_server
+FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel AS zonos_server
 
 ENV XDG_CACHE_HOME=/tmp/.cache \
     TRITON_CACHE_DIR=/tmp/triton_cache \
@@ -16,8 +16,7 @@ WORKDIR /app
 COPY . /app/
 
 # Install Python dependencies
-RUN uv pip install --system --no-cache -e . && \
-    uv pip install --system --no-cache -e .[compile]
+RUN uv pip install --system --no-cache -e .
 
 # Compile Python files and remove source
 RUN python -m compileall -b -q --invalidation-mode unchecked-hash \
