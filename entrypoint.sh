@@ -2,6 +2,12 @@
 set -euo pipefail
 
 WARMUP_MARKER="/tmp/ct_zonos_warmup_done"
+AUTO_WARMUP="${AUTO_WARMUP:-1}"
+WARMUP_ALLOWED="${WARMUP_ALLOWED:-0}"
+
+if [[ "$AUTO_WARMUP" != "0" && "$WARMUP_ALLOWED" != "1" ]]; then
+  exec python3 -m CT_generic_server_client.server --port "${ZONOS_PORT:-8189}"
+fi
 
 if [[ ! -f "$WARMUP_MARKER" ]]; then
   python3 - <<'PY'
