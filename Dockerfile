@@ -2,13 +2,16 @@ FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel AS zonos_server
 
 ENV XDG_CACHE_HOME=/tmp/.cache \
     TRITON_CACHE_DIR=/tmp/triton_cache \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    TZ=Europe/Amsterdam
 
 RUN pip install --no-cache-dir uv
 
 # Install runtime dependencies
 RUN apt update && \
-    apt install -y --no-install-recommends espeak-ng curl && \
+    apt install -y --no-install-recommends espeak-ng curl tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
