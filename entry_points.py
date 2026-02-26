@@ -10,6 +10,39 @@ from fastapi.responses import FileResponse
 
 router = APIRouter()
 
+_DEFAULT_TTS_TIMEOUT_SECONDS = 300
+_MIN_TTS_TIMEOUT_SECONDS = 1200
+_REQUEST_TIMEOUT_PADDING_SECONDS = 10
+
+
+def _parse_configured_timeout_seconds() -> int:
+    raw_timeout = os.getenv("CT_ZONOS_TTS_TIMEOUT_SECONDS")
+    if raw_timeout is None:
+        return _DEFAULT_TTS_TIMEOUT_SECONDS
+    try:
+        timeout_seconds = int(raw_timeout.strip())
+    except (TypeError, ValueError):
+        logging.warning(
+            "Invalid CT_ZONOS_TTS_TIMEOUT_SECONDS=%r; using default=%s",
+            raw_timeout,
+            _DEFAULT_TTS_TIMEOUT_SECONDS,
+        )
+        return _DEFAULT_TTS_TIMEOUT_SECONDS
+    if timeout_seconds <= 0:
+        logging.warning(
+            "Non-positive CT_ZONOS_TTS_TIMEOUT_SECONDS=%s; using default=%s",
+            timeout_seconds,
+            _DEFAULT_TTS_TIMEOUT_SECONDS,
+        )
+        return _DEFAULT_TTS_TIMEOUT_SECONDS
+    return timeout_seconds
+
+
+def _resolve_timeout_budget_seconds() -> tuple[int, int]:
+    configured_timeout_seconds = _parse_configured_timeout_seconds()
+    effective_timeout_seconds = max(configured_timeout_seconds, _MIN_TTS_TIMEOUT_SECONDS)
+    return configured_timeout_seconds, effective_timeout_seconds
+
 
 async def process_tts_with_subprocess(
     text: str,
@@ -26,6 +59,9 @@ async def process_tts_with_subprocess(
     expressiveness: float,
     speaking_rate: float,
     background_tasks: BackgroundTasks,
+    *,
+    configured_timeout_seconds: int,
+    effective_timeout_seconds: int,
 ):
     """Process TTS using subprocess for automatic resource cleanup"""
 
@@ -91,11 +127,11 @@ async def process_tts_with_subprocess(
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)  # 5 minute timeout
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=effective_timeout_seconds)
         except asyncio.TimeoutError as e:
             process.kill()
             await process.wait()
-            raise subprocess.TimeoutExpired(cmd, 300) from e
+            raise subprocess.TimeoutExpired(cmd, effective_timeout_seconds) from e
 
         stdout_text = stdout.decode("utf-8") if stdout else ""
         stderr_text = stderr.decode("utf-8") if stderr else ""
@@ -137,7 +173,11 @@ async def process_tts_with_subprocess(
         )
 
     except subprocess.TimeoutExpired as e:
-        error_detail = f"TTS subprocess timed out after {e.timeout}s"
+        error_detail = (
+            "TTS subprocess timed out "
+            f"(configured_timeout_seconds={configured_timeout_seconds}, "
+            f"effective_timeout_seconds={effective_timeout_seconds}, elapsed_timeout_seconds={e.timeout})"
+        )
         logging.error(error_detail)
         cleanup_temp_files(
             [
@@ -197,6 +237,8 @@ async def inference_sft(
     speaking_rate: float = Form(),
 ):
     """Text-to-Speech Inference endpoint using subprocess"""
+    configured_timeout_seconds, effective_timeout_seconds = _resolve_timeout_budget_seconds()
+    request_timeout_seconds = effective_timeout_seconds + _REQUEST_TIMEOUT_PADDING_SECONDS
     try:
         return await asyncio.wait_for(
             process_tts_with_subprocess(
@@ -214,10 +256,17 @@ async def inference_sft(
                 expressiveness,
                 speaking_rate,
                 background_tasks,
+                configured_timeout_seconds=configured_timeout_seconds,
+                effective_timeout_seconds=effective_timeout_seconds,
             ),
-            timeout=310,
+            timeout=request_timeout_seconds,
         )
     except asyncio.TimeoutError as e:
-        error_detail = "Request timeout: TTS processing took longer than 310 seconds"
+        error_detail = (
+            "Request timeout: TTS processing exceeded request timeout "
+            f"(configured_timeout_seconds={configured_timeout_seconds}, "
+            f"effective_timeout_seconds={effective_timeout_seconds}, "
+            f"request_timeout_seconds={request_timeout_seconds})"
+        )
         logging.error(error_detail)
         raise HTTPException(status_code=504, detail=error_detail) from e
