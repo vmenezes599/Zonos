@@ -10,8 +10,8 @@ from fastapi.responses import FileResponse
 
 router = APIRouter()
 
-_DEFAULT_TTS_TIMEOUT_SECONDS = 300
-_MIN_TTS_TIMEOUT_SECONDS = 1200
+_DEFAULT_TTS_TIMEOUT_SECONDS = 1200
+_MAX_TTS_TIMEOUT_SECONDS = 1200
 _REQUEST_TIMEOUT_PADDING_SECONDS = 10
 
 
@@ -40,7 +40,20 @@ def _parse_configured_timeout_seconds() -> int:
 
 def _resolve_timeout_budget_seconds() -> tuple[int, int]:
     configured_timeout_seconds = _parse_configured_timeout_seconds()
-    effective_timeout_seconds = max(configured_timeout_seconds, _MIN_TTS_TIMEOUT_SECONDS)
+    effective_timeout_seconds = min(configured_timeout_seconds, _MAX_TTS_TIMEOUT_SECONDS)
+    if configured_timeout_seconds > _MAX_TTS_TIMEOUT_SECONDS:
+        logging.warning(
+            "CT_ZONOS_TTS_TIMEOUT_SECONDS=%s exceeds max=%s; clamping effective timeout",
+            configured_timeout_seconds,
+            _MAX_TTS_TIMEOUT_SECONDS,
+        )
+    logging.info(
+        "Resolved Zonos timeout budget configured=%s effective=%s default=%s max=%s",
+        configured_timeout_seconds,
+        effective_timeout_seconds,
+        _DEFAULT_TTS_TIMEOUT_SECONDS,
+        _MAX_TTS_TIMEOUT_SECONDS,
+    )
     return configured_timeout_seconds, effective_timeout_seconds
 
 
