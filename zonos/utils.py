@@ -30,10 +30,7 @@ def pad_weight_(w: nn.Embedding | nn.Linear, multiple: int):
 def get_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device(torch.cuda.current_device())
-    # MPS breaks for whatever reason. Uncomment when it's working.
-    # if torch.mps.is_available():
-    #     return torch.device("mps")
-    return torch.device("cpu")
+    raise RuntimeError("CUDA is required for Zonos worker execution; no GPU is available.")
 
 
 DEFAULT_DEVICE = get_device()
