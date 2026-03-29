@@ -7,8 +7,12 @@ import sys
 import io
 import random
 
+import os
+import subprocess
+import tempfile
+
+import soundfile as sf
 import torch
-import torchaudio
 
 from zonos.conditioning import make_cond_dict
 from zonos.model import Zonos
@@ -132,7 +136,8 @@ def create_speaker_embedding(model: Zonos, audio_file: str):
         audio_content = f.read()
 
     audio_buffer = io.BytesIO(audio_content)
-    wav, sample_rate = torchaudio.load(audio_buffer)
+    wav_np, sample_rate = sf.read(audio_buffer, dtype="float32", always_2d=True)  # [T, C]
+    wav = torch.from_numpy(wav_np.T)  # [C, T]
     return model.make_speaker_embedding(wav, sample_rate)
 
 
@@ -415,9 +420,21 @@ def process_tts(
         final_duration,
     )
 
-    # Save to file
+    # Save to file via soundfile (WAV) + ffmpeg (MP3) to avoid torchcodec dependency
     logger.info(f"Saving audio to: {output_file}")
-    torchaudio.save(output_file, final_audio, model.autoencoder.sampling_rate, format="mp3")
+    audio_np = final_audio.cpu().numpy().T  # [C, T] -> [T, C], works for mono and stereo
+    tmp_wav_fd, tmp_wav_path = tempfile.mkstemp(suffix=".wav")
+    os.close(tmp_wav_fd)
+    try:
+        sf.write(tmp_wav_path, audio_np, model.autoencoder.sampling_rate)
+        subprocess.run(
+            ["ffmpeg", "-i", tmp_wav_path, "-q:a", "2", "-y", output_file],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        if os.path.exists(tmp_wav_path):
+            os.unlink(tmp_wav_path)
     logger.info("TTS processing completed successfully")
     print(f"Audio saved to: {output_file}")
 
