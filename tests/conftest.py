@@ -29,7 +29,16 @@ def _start_uvicorn_server(server_dir: Path, port: int, health_url: str) -> subpr
     if uvicorn_path.exists():
         cmd = [str(uvicorn_path), "generic_ai_server_client.server:app", "--host", "0.0.0.0", "--port", str(port)]
     else:
-        cmd = [sys.executable, "-m", "uvicorn", "generic_ai_server_client.server:app", "--host", "0.0.0.0", "--port", str(port)]
+        cmd = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "generic_ai_server_client.server:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            str(port),
+        ]
 
     process = subprocess.Popen(
         cmd,

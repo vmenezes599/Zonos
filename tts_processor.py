@@ -67,7 +67,7 @@ def log_audio_stats(audio_chunks, label="Audio Chunks", sample_count=3):
         )
 
         # Analyze temporal decay within the chunk
-        analyze_temporal_decay(chunk, f"Chunk {idx+1}")
+        analyze_temporal_decay(chunk, f"Chunk {idx + 1}")
 
     # Overall statistics
     all_rms = [torch.sqrt(torch.mean(chunk**2)).item() for chunk in audio_chunks]
@@ -270,7 +270,7 @@ def normalize_audio_chunks(audio_chunks, apply_compensation=True, compensation_s
         logger.info("Applying temporal compensation to counteract volume decay...")
         compensated_chunks = []
         for i, chunk in enumerate(audio_chunks):
-            compensated_chunk = apply_temporal_compensation(chunk, f"Chunk {i+1}", compensation_strength)
+            compensated_chunk = apply_temporal_compensation(chunk, f"Chunk {i + 1}", compensation_strength)
             compensated_chunks.append(compensated_chunk)
 
         # Log statistics after compensation but before normalization
